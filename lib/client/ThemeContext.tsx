@@ -114,39 +114,64 @@ export const dark: Colors = {
   barEmpty: "#34373F",
 };
 
+export type ThemeMode = "light" | "dark" | "auto";
+
+const THEME_MODE_KEY = "theme_mode";
+const LEGACY_DARK_KEY = "theme_dark";
+
 type ThemeContextType = {
+  /** The user's chosen mode: explicit light/dark, or auto (follow the device). */
+  mode: ThemeMode;
+  setMode: (mode: ThemeMode) => void;
+  /** Resolved value: true when the effective theme is dark. */
   isDark: boolean;
-  toggleTheme: () => void;
   colors: Colors;
 };
 
 const ThemeContext = createContext<ThemeContextType>({
+  mode: "auto",
+  setMode: () => {},
   isDark: false,
-  toggleTheme: () => {},
   colors: light,
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [isDark, setIsDark] = useState(false);
+  const [mode, setModeState] = useState<ThemeMode>("auto");
+  const [systemDark, setSystemDark] = useState(false);
 
   useEffect(() => {
-    // Apply the persisted theme after mount so SSR markup (always light) matches
-    // the client's first render, then upgrades to the stored preference.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (getItem("theme_dark") === "true") setIsDark(true);
+    // Resolve the stored preference after mount so SSR markup (always light)
+    // matches the client's first render, then upgrades to the saved choice.
+    const stored = getItem(THEME_MODE_KEY);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (stored === "light" || stored === "dark" || stored === "auto") {
+      setModeState(stored);
+    } else {
+      // Migrate the old boolean dark-mode flag, if present.
+      const legacy = getItem(LEGACY_DARK_KEY);
+      if (legacy === "true") setModeState("dark");
+      else if (legacy === "false") setModeState("light");
+    }
+
+    // Track the device theme so "auto" can follow it live.
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    setSystemDark(mq.matches);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  function toggleTheme() {
-    setIsDark(prev => {
-      const next = !prev;
-      setItem("theme_dark", String(next));
-      return next;
-    });
+  function setMode(next: ThemeMode) {
+    setModeState(next);
+    setItem(THEME_MODE_KEY, next);
   }
+
+  const isDark = mode === "auto" ? systemDark : mode === "dark";
 
   return (
     <ThemeContext.Provider
-      value={{ isDark, toggleTheme, colors: isDark ? dark : light }}
+      value={{ mode, setMode, isDark, colors: isDark ? dark : light }}
     >
       {children}
     </ThemeContext.Provider>

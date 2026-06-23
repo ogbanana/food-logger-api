@@ -8,7 +8,11 @@ import {
   getUserEmail,
   logout,
 } from "../../lib/client/authClient";
-import { useTheme, type Colors } from "../../lib/client/ThemeContext";
+import {
+  useTheme,
+  type Colors,
+  type ThemeMode,
+} from "../../lib/client/ThemeContext";
 import { useSettings } from "../../lib/client/SettingsContext";
 import { useDrawer } from "../../lib/client/DrawerContext";
 import FoodLoggerLogo from "./icons/FoodLoggerLogo";
@@ -24,7 +28,7 @@ const DRAWER_WIDTH = "78%";
 export default function Drawer() {
   const router = useRouter();
   const { drawerOpen, setDrawerOpen } = useDrawer();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, mode, setMode, isDark } = useTheme();
   const { calorieTarget, setCalorieTarget } = useSettings();
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
@@ -57,7 +61,7 @@ export default function Drawer() {
     setEditingTarget(false);
   }
 
-  const s = makeStyles(colors);
+  const s = makeStyles(colors, isDark);
 
   return (
     <>
@@ -179,64 +183,85 @@ export default function Drawer() {
           <div style={s.section}>
             <div style={s.sectionLabel}>SETTINGS</div>
 
-            {/* Dark mode */}
-            <div style={s.themeRow}>
-              <span style={s.themeLabel}>Dark Mode</span>
-              <button
-                role="switch"
-                aria-checked={isDark}
-                onClick={toggleTheme}
-                style={{
-                  ...s.switch,
-                  backgroundColor: isDark ? "#4A4A4A" : colors.surfaceAlt,
-                }}
-              >
-                <span
-                  style={{
-                    ...s.switchThumb,
-                    backgroundColor: colors.textPrimary,
-                    transform: isDark ? "translateX(20px)" : "translateX(0)",
-                  }}
-                />
-              </button>
-            </div>
+            <div style={s.settingsCard}>
+              {/* Theme */}
+              <div style={s.settingEditRow}>
+                <span style={s.settingLabel}>Theme</span>
+                <div style={s.segTrack} role="radiogroup" aria-label="Theme">
+                  {(["light", "dark", "auto"] as ThemeMode[]).map(m => {
+                    const active = mode === m;
+                    return (
+                      <button
+                        key={m}
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setMode(m)}
+                        style={{
+                          ...s.segBtn,
+                          ...(active ? s.segBtnActive : {}),
+                        }}
+                      >
+                        {m === "auto" ? "Auto" : m === "dark" ? "Dark" : "Light"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-            {/* Daily calorie target */}
-            <div style={s.targetBlock}>
-              <span style={s.themeLabel}>Daily Calorie Target</span>
+              <div style={s.rowDivider} />
+
+              {/* Daily calorie target */}
               {editingTarget ? (
-                <div style={s.targetEditRow}>
-                  <input
-                    style={s.targetInput}
-                    value={targetInput}
-                    onChange={e => setTargetInput(e.target.value)}
-                    inputMode="numeric"
-                    autoFocus
-                    placeholder={String(calorieTarget)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") handleSaveTarget();
-                    }}
-                  />
-                  <button style={s.targetSaveBtn} onClick={handleSaveTarget}>
-                    Save
-                  </button>
-                  <button
-                    style={s.targetCancelBtn}
-                    onClick={() => setEditingTarget(false)}
-                  >
-                    Cancel
-                  </button>
+                <div style={s.settingEditRow}>
+                  <span style={s.settingLabel}>Daily Calorie Target</span>
+                  <div style={s.targetEditRow}>
+                    <input
+                      style={s.targetInput}
+                      value={targetInput}
+                      onChange={e => setTargetInput(e.target.value)}
+                      inputMode="numeric"
+                      autoFocus
+                      placeholder={String(calorieTarget)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") handleSaveTarget();
+                      }}
+                    />
+                    <button style={s.targetSaveBtn} onClick={handleSaveTarget}>
+                      Save
+                    </button>
+                    <button
+                      style={s.targetCancelBtn}
+                      onClick={() => setEditingTarget(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
-                  style={s.targetValueRow}
+                  style={s.settingRowBtn}
                   onClick={() => {
                     setTargetInput(String(calorieTarget));
                     setEditingTarget(true);
                   }}
                 >
-                  <span style={s.targetValue}>{calorieTarget} kcal</span>
-                  <span style={s.targetEditHint}>Edit</span>
+                  <span style={s.settingLabel}>Daily Calorie Target</span>
+                  <span style={s.settingValueWrap}>
+                    <span style={s.settingValue}>{calorieTarget} kcal</span>
+                    <svg
+                      width={14}
+                      height={14}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={colors.textMuted}
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M9 6 L15 12 L9 18" />
+                    </svg>
+                  </span>
                 </button>
               )}
             </div>
@@ -285,7 +310,10 @@ function LegendRow({
   );
 }
 
-function makeStyles(colors: Colors): Record<string, CSSProperties> {
+function makeStyles(
+  colors: Colors,
+  isDark = false,
+): Record<string, CSSProperties> {
   return {
     backdrop: {
       position: "absolute",
@@ -391,44 +419,78 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       color: colors.textMuted,
     },
     legendGrid: { display: "flex", flexDirection: "column", gap: 10 },
-    themeRow: {
+    settingsCard: {
+      backgroundColor: colors.surfaceAlt,
+      border: `0.5px solid ${colors.border}`,
+      borderRadius: 14,
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+    },
+    settingRow: {
       display: "flex",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      padding: "12px 14px",
+      minHeight: 50,
     },
-    themeLabel: { fontSize: 14, color: colors.textPrimary, fontWeight: 500 },
-    switch: {
-      width: 48,
-      height: 28,
-      borderRadius: 99,
-      border: "none",
-      cursor: "pointer",
-      padding: 3,
-      display: "flex",
-      alignItems: "center",
-      transition: "background-color 0.2s ease",
-    },
-    switchThumb: {
-      width: 22,
-      height: 22,
-      borderRadius: 99,
-      transition: "transform 0.2s ease",
-      boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
-    },
-    targetBlock: { display: "flex", flexDirection: "column", gap: 8, marginTop: 14 },
-    targetValueRow: {
+    settingRowBtn: {
       display: "flex",
       flexDirection: "row",
       alignItems: "center",
-      gap: 10,
+      justifyContent: "space-between",
+      padding: "12px 14px",
+      minHeight: 50,
+      width: "100%",
       background: "none",
       border: "none",
-      padding: 0,
       cursor: "pointer",
+      textAlign: "left",
     },
-    targetValue: { fontSize: 15, fontWeight: 600, color: colors.calText },
-    targetEditHint: { fontSize: 12, color: colors.textMuted },
+    settingEditRow: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      padding: "12px 14px",
+    },
+    rowDivider: { height: 0.5, backgroundColor: colors.border, marginLeft: 14 },
+    settingLabel: { fontSize: 14, color: colors.textPrimary, fontWeight: 500 },
+    settingValueWrap: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    settingValue: { fontSize: 14, fontWeight: 600, color: colors.calText },
+    segTrack: {
+      display: "flex",
+      flexDirection: "row",
+      // In dark mode use a lighter well so the recessed dark pills stand out.
+      backgroundColor: isDark ? colors.surface : colors.bg,
+      borderRadius: 11,
+      padding: 3,
+      gap: 3,
+    },
+    segBtn: {
+      flex: 1,
+      padding: "8px 0",
+      borderRadius: 8,
+      border: "none",
+      // Unselected pills get an explicit darker fill in dark mode.
+      backgroundColor: isDark ? colors.bg : "transparent",
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: 500,
+      color: colors.textSecondary,
+      transition: "color 0.15s ease, background-color 0.15s ease",
+    },
+    segBtnActive: {
+      backgroundColor: colors.primary,
+      color: colors.primaryText,
+      fontWeight: 600,
+      boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+    },
     targetEditRow: { display: "flex", flexDirection: "row", alignItems: "center", gap: 8 },
     targetInput: {
       flex: 1,
