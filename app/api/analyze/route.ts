@@ -2,7 +2,12 @@ import { NextRequest } from "next/server";
 import { analyzeFood, Message } from "@/lib/llm";
 import pool from "@/lib/db";
 import { getUserId, getRateLimitKey } from "@/lib/getUser";
-import { checkAndIncrementUsage } from "@/lib/rateLimit";
+import {
+  checkUsage,
+  incrementUsage,
+  getUsage,
+  checkTotalCalls,
+} from "@/lib/rateLimit";
 import { isWithinSevenDays, todayLocalDate } from "@/lib/dateUtils";
 
 export async function POST(req: NextRequest) {
@@ -13,18 +18,20 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Missing user ID" }, { status: 401 });
     }
 
-    // Check rate limit. Guests are limited by IP (the x-user-id header is
-    // spoofable), authenticated users by their verified account.
+    // Guests are limited by IP (the x-user-id header is spoofable), authenticated
+    // users by their verified account.
     const rateLimitKey = getRateLimitKey(req, userId);
-    const { allowed, remaining, limit } =
-      await checkAndIncrementUsage(rateLimitKey);
-    if (!allowed) {
+
+    // Bound TOTAL model calls per day (food + conversational) so that messages
+    // which don't count as food analyses still can't be used to spam the model.
+    const { allowed: underTotalCap } = await checkTotalCalls(rateLimitKey);
+    if (!underTotalCap) {
       return Response.json(
         {
-          error: "Daily limit reached",
+          error: "Too many requests today",
           code: "RATE_LIMIT_EXCEEDED",
           remaining: 0,
-          limit,
+          limit: 0,
         },
         { status: 429 },
       );
@@ -56,6 +63,41 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await analyzeFood(messages, today);
+
+    // Only an actual food log counts against the daily limit and gets persisted.
+    // Greetings/questions/small talk (and any empty parse) get a conversational
+    // reply, never a charge and never a write (which would wipe the day).
+    const isFoodLog =
+      data.is_food_log !== false &&
+      Array.isArray(data.meals) &&
+      data.meals.length > 0;
+
+    if (!isFoodLog) {
+      const usage = await getUsage(rateLimitKey);
+      return Response.json({
+        is_food_log: false,
+        reply:
+          data.reply?.trim() ||
+          "I'm here to help you log food — tell me what you ate and I'll break down the calories and macros.",
+        remaining: usage.remaining,
+        limit: usage.limit,
+      });
+    }
+
+    // Enforce and consume the daily food-analysis limit now that we know it's food.
+    const usage = await checkUsage(rateLimitKey);
+    if (!usage.allowed) {
+      return Response.json(
+        {
+          error: "Daily limit reached",
+          code: "RATE_LIMIT_EXCEEDED",
+          remaining: 0,
+          limit: usage.limit,
+        },
+        { status: 429 },
+      );
+    }
+    const { remaining, limit } = await incrementUsage(rateLimitKey);
 
     let targetDate = requestedDate || today;
 

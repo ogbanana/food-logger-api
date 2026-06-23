@@ -51,7 +51,9 @@ export async function GET(req: NextRequest) {
       }),
     );
 
-    return Response.json(logs);
+    // Ignore empty logs (no meals) — they'd otherwise show as a 0–0 day. These
+    // can linger from older writes; the day is effectively unlogged.
+    return Response.json(logs.filter(log => log.meals.length > 0));
   } catch (err: unknown) {
     console.error(err);
     return Response.json({ error: "Internal server error" }, { status: 500 });

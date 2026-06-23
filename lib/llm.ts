@@ -5,17 +5,21 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function buildSystem(today: string): string {
-  return `You are a calorie and nutrition estimator embedded in a conversational food logging app. The user describes what they ate in free text. Your job is to:
-1. Parse and group food items into meals (Breakfast, Lunch, Dinner, Snacks) based on context clues and typical timing.
-2. For each meal, estimate calories and macros (protein, carbs, fat). Because portion sizes are often vague, always provide a calorie range (low and high estimate) and note your key assumptions.
-3. Provide daily totals as ranges.
-4. If the user is adding to a previous log, accumulate the new items with the existing ones and return the full updated day.
-5. Determine which day the user is logging for and return it as "log_date" (YYYY-MM-DD). Today's date is ${today}. Default "log_date" to today unless the user clearly refers to another day — e.g. "yesterday", "last night" (treat as yesterday), a weekday name, "N days ago", or an explicit date — in which case resolve it to the correct calendar date relative to today. Phrases describing where food came from (e.g. "yesterday's leftovers") are NOT a different log day.
+  return `You are a calorie and nutrition estimator embedded in a conversational food logging app. Your job:
+
+1. First decide whether the user's latest message is actually logging food they ate. If it is NOT a food log — e.g. a greeting, a question, thanks, or other small talk — set "is_food_log" to false, return an empty "meals" array with all "totals" set to 0, and put a short, friendly one-sentence "reply" that gently steers them to tell you what they ate. Never invent food that wasn't mentioned. Otherwise set "is_food_log" to true and continue.
+2. Parse and group food items into meals (Breakfast, Lunch, Dinner, Snacks) based on context clues and typical timing.
+3. For each meal, estimate calories and macros (protein, carbs, fat). Because portion sizes are often vague, always provide a calorie range (low and high estimate) and note your key assumptions.
+4. Provide daily totals as ranges.
+5. If the user is adding to a previous log, accumulate the new items with the existing ones and return the full updated day.
+6. Determine which day the user is logging for and return it as "log_date" (YYYY-MM-DD). Today's date is ${today} (a ${weekdayName(today)}). Default "log_date" to today unless the user clearly refers to another day — e.g. "yesterday", "last night" (treat as yesterday), a weekday name, "N days ago", or an explicit date — in which case resolve it to the correct calendar date relative to today. A bare weekday name (e.g. "Sunday") means the MOST RECENT PAST occurrence of that weekday, never an upcoming one. Phrases describing where food came from (e.g. "yesterday's leftovers") are NOT a different log day.
 
 Return ONLY a valid JSON object, no markdown, no backticks, no preamble.
 
 Shape:
 {
+  "is_food_log": true,
+  "reply": "",
   "intro": "brief acknowledgment",
   "log_date": "${today}",
   "meals": [
@@ -69,12 +73,72 @@ export type CalorieLog = {
   closing?: string;
   /** The day the user is logging for, resolved by the model (YYYY-MM-DD). */
   log_date?: string;
+  /** False when the message isn't logging food (greeting, question, small talk). */
+  is_food_log?: boolean;
+  /** A short conversational reply, used when is_food_log is false. */
+  reply?: string;
 };
 
 export type Message = {
   role: "user" | "assistant";
   content: string;
 };
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+function weekdayName(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return WEEKDAYS[new Date(y, m - 1, d).getDay()];
+}
+
+/**
+ * Resolve a natural-language day reference ("last Sunday", "the 21st", "two days
+ * ago") to a YYYY-MM-DD date relative to `today`, or null if no clear day is
+ * given. Used to re-resolve the date when the user clarifies a confirmation —
+ * no food parsing, so it doesn't disturb the already-parsed meals.
+ */
+export async function resolveDate(
+  text: string,
+  today: string,
+): Promise<string | null> {
+  const prompt = `Today is ${today} (a ${weekdayName(today)}). The user is telling you which past day a food log is for. Resolve the single day they mean to a calendar date (YYYY-MM-DD). A bare weekday name means the MOST RECENT PAST occurrence. If they don't clearly specify a day, use null.
+
+Respond with ONLY a JSON object, no markdown: {"date": "YYYY-MM-DD"} or {"date": null}
+
+User message: ${JSON.stringify(text)}`;
+
+  const parse = (raw: string): string | null => {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const obj = JSON.parse(match[0]) as { date?: string | null };
+    return obj.date && /^\d{4}-\d{2}-\d{2}$/.test(obj.date) ? obj.date : null;
+  };
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const result = await model.generateContent(prompt);
+    return parse(result.response.text());
+  } catch {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 64,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const responseText = response.content
+      .filter(b => b.type === "text")
+      .map(b => b.text)
+      .join("");
+    return parse(responseText);
+  }
+}
 
 export async function analyzeFood(
   messages: Message[],

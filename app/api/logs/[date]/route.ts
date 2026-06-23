@@ -65,6 +65,15 @@ export async function GET(
       [log.id],
     );
 
+    // A log with no meals is effectively unlogged — treat it as not found so the
+    // day reads as empty/editable rather than a 0–0 entry.
+    if (!mealsResult.rows.length) {
+      return Response.json(
+        { error: "No log found for this date" },
+        { status: 404 },
+      );
+    }
+
     return Response.json({ ...log, meals: mealsResult.rows });
   } catch (err: unknown) {
     console.error(err);
@@ -212,6 +221,17 @@ export async function DELETE(
     );
     if (deleteResult.rowCount === 0) {
       return Response.json({ error: "Meal not found" }, { status: 404 });
+    }
+
+    // If that was the last meal, the day is no longer logged — drop the log row
+    // rather than leaving an empty 0–0 entry.
+    const remaining = await pool.query<{ count: string }>(
+      "SELECT COUNT(*)::int AS count FROM meals WHERE log_id = $1",
+      [logId],
+    );
+    if (Number(remaining.rows[0].count) === 0) {
+      await pool.query("DELETE FROM logs WHERE id = $1", [logId]);
+      return Response.json({ success: true });
     }
 
     await pool.query(

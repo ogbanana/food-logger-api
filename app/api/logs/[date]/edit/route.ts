@@ -152,6 +152,14 @@ export async function PUT(
 
     const logId = logResult.rows[0].id;
 
+    // Removing every meal means the day is no longer logged — delete the whole
+    // log instead of leaving an empty 0–0 entry behind.
+    if (!Array.isArray(log.meals) || log.meals.length === 0) {
+      await pool.query("DELETE FROM meals WHERE log_id = $1", [logId]);
+      await pool.query("DELETE FROM logs WHERE id = $1", [logId]);
+      return Response.json({ success: true });
+    }
+
     // Update log totals
     await pool.query(
       `UPDATE logs SET
