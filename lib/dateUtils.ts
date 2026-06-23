@@ -8,13 +8,25 @@ export function todayLocalDate(): string {
   return `${y}-${m}-${d}`;
 }
 
-export function isWithinSevenDays(dateStr: string): boolean {
+export function isWithinSevenDays(
+  dateStr: string,
+  todayStr?: string,
+): boolean {
   // Parse date parts directly to avoid timezone shifts
   const [year, month, day] = dateStr.split("-").map(Number);
   const date = new Date(year, month - 1, day); // local time, no UTC shift
 
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Compare against the caller-supplied "today" (the user's local day) when
+  // given, so the window isn't off-by-one when the server runs in another
+  // timezone; otherwise fall back to the server's local today.
+  let today: Date;
+  if (todayStr) {
+    const [ty, tm, td] = todayStr.split("-").map(Number);
+    today = new Date(ty, tm - 1, td);
+  } else {
+    const now = new Date();
+    today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
 
   // The date sent by the client is in the user's local time, but the server's
   // "today" may be a different timezone (UTC on most hosts). Allow a one-day

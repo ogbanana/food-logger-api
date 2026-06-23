@@ -4,17 +4,20 @@ import Anthropic from "@anthropic-ai/sdk";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM = `You are a calorie and nutrition estimator embedded in a conversational food logging app. The user will describe everything they ate today in free text. Your job is to:
+function buildSystem(today: string): string {
+  return `You are a calorie and nutrition estimator embedded in a conversational food logging app. The user describes what they ate in free text. Your job is to:
 1. Parse and group food items into meals (Breakfast, Lunch, Dinner, Snacks) based on context clues and typical timing.
 2. For each meal, estimate calories and macros (protein, carbs, fat). Because portion sizes are often vague, always provide a calorie range (low and high estimate) and note your key assumptions.
 3. Provide daily totals as ranges.
 4. If the user is adding to a previous log, accumulate the new items with the existing ones and return the full updated day.
+5. Determine which day the user is logging for and return it as "log_date" (YYYY-MM-DD). Today's date is ${today}. Default "log_date" to today unless the user clearly refers to another day — e.g. "yesterday", "last night" (treat as yesterday), a weekday name, "N days ago", or an explicit date — in which case resolve it to the correct calendar date relative to today. Phrases describing where food came from (e.g. "yesterday's leftovers") are NOT a different log day.
 
 Return ONLY a valid JSON object, no markdown, no backticks, no preamble.
 
 Shape:
 {
   "intro": "brief acknowledgment",
+  "log_date": "${today}",
   "meals": [
     {
       "meal": "Breakfast",
@@ -38,6 +41,7 @@ Shape:
   },
   "closing": "brief helpful note"
 }`;
+}
 
 export type Meal = {
   meal: string;
@@ -63,6 +67,8 @@ export type CalorieLog = {
     fiber_g: number;
   };
   closing?: string;
+  /** The day the user is logging for, resolved by the model (YYYY-MM-DD). */
+  log_date?: string;
 };
 
 export type Message = {
@@ -70,10 +76,13 @@ export type Message = {
   content: string;
 };
 
-export async function analyzeFood(messages: Message[]): Promise<CalorieLog> {
+export async function analyzeFood(
+  messages: Message[],
+  today: string,
+): Promise<CalorieLog> {
   try {
     // Try Gemini first
-    return await analyzeWithGemini(messages);
+    return await analyzeWithGemini(messages, today);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "";
     // Fall back to Claude on rate limit or any Gemini error
@@ -83,16 +92,19 @@ export async function analyzeFood(messages: Message[]): Promise<CalorieLog> {
       message.includes("Too Many Requests")
     ) {
       console.log("Gemini rate limited, falling back to Claude...");
-      return await analyzeWithClaude(messages);
+      return await analyzeWithClaude(messages, today);
     }
     throw err;
   }
 }
 
-async function analyzeWithGemini(messages: Message[]): Promise<CalorieLog> {
+async function analyzeWithGemini(
+  messages: Message[],
+  today: string,
+): Promise<CalorieLog> {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.0-flash",
-    systemInstruction: SYSTEM,
+    systemInstruction: buildSystem(today),
   });
 
   const history = messages.slice(0, -1).map(m => ({
@@ -110,11 +122,14 @@ async function analyzeWithGemini(messages: Message[]): Promise<CalorieLog> {
   return JSON.parse(jsonMatch[0]) as CalorieLog;
 }
 
-async function analyzeWithClaude(messages: Message[]): Promise<CalorieLog> {
+async function analyzeWithClaude(
+  messages: Message[],
+  today: string,
+): Promise<CalorieLog> {
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 1024,
-    system: SYSTEM,
+    system: buildSystem(today),
     messages,
   });
 

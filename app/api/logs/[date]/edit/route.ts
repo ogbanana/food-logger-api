@@ -108,7 +108,9 @@ export async function POST(
       ...messages,
     ];
 
-    const proposed = await analyzeFood(contextualMessages);
+    // This route edits a fixed day, so anchor the model's "today" to it; the
+    // inferred log_date is not used here.
+    const proposed = await analyzeFood(contextualMessages, date);
     return Response.json({ proposed, remaining, limit });
   } catch (err: unknown) {
     console.error(err);
