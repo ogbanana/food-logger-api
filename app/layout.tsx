@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import AppProviders from "../components/web/AppProviders";
+import ServiceWorkerRegister from "../components/web/ServiceWorkerRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,9 +15,28 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "food-logger-api",
+  title: "Food Logger",
   description:
-    "Conversational food-logging backend — parses free-text meals into calorie and macro estimates via LLM.",
+    "AI-powered food and calorie logging via natural language. Describe what you ate and get calorie and macro estimates.",
+  applicationName: "Food Logger",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Food Logger",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: "#191B22" },
+  ],
 };
 
 export default function RootLayout({
@@ -25,7 +46,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AppProviders>{children}</AppProviders>
+        <ServiceWorkerRegister />
+      </body>
     </html>
   );
 }

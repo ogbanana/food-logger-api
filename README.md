@@ -1,12 +1,17 @@
 # food-logger-api
 
-A conversational food-logging API built on Next.js. Users describe what they ate in free text; an LLM parses it into meals, estimates calories and macros (as ranges, since portions are vague), and the result is persisted per user per day in Postgres.
+A conversational food-logging app built on Next.js. Users describe what they ate in free text; an LLM parses it into meals, estimates calories and macros (as ranges, since portions are vague), and the result is persisted per user per day in Postgres.
+
+This repo contains both halves of the product:
+
+- a **JSON API** (route handlers under `app/api`), and
+- a **web frontend** (React client pages under `app/`) that consumes that API from the same origin.
 
 The app uses **Gemini** (`gemini-2.0-flash`) as the primary model and **Claude** (`claude-sonnet-4-5`) as an automatic fallback when Gemini is rate-limited.
 
 ## Stack
 
-- **Next.js 16** (App Router, route handlers under `app/api`)
+- **Next.js 16** (App Router — route handlers under `app/api`, client pages under `app/`)
 - **React 19**
 - **Postgres** via `pg`
 - **Google Generative AI** + **Anthropic** SDKs
@@ -59,6 +64,35 @@ npm run start    # serve the production build
 npm run lint     # eslint
 ```
 
+Then open [http://localhost:3000](http://localhost:3000) for the web app. The
+frontend talks to the API on the same origin, so no extra configuration is
+needed.
+
+## Web app
+
+The site itself is the food logger — a phone-width UI rendered as React client
+pages, persisting auth and preferences in `localStorage`. Unauthenticated
+visitors get an anonymous guest identity (sent via `x-user-id`); signing up
+migrates their guest logs into the new account.
+
+| Route         | Screen                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| `/`           | **Log** — describe your meals in plain text; results show as meal cards with calorie/macro pills, plus the daily free-analysis counter. |
+| `/dashboard`  | **Dashboard** — today / week / month views: summary cards, progress-to-goal bar, weekly bar chart, and a navigable month calendar. |
+| `/log/[date]` | **Day detail** — review a day's meals, edit fields inline, or propose AI-assisted edits (propose → confirm). Limited to the past 7 days. |
+| `/login`      | **Log in** to an existing account.                                                             |
+| `/signup`     | **Sign up** (migrates guest logs).                                                             |
+
+A shared shell (header, bottom tab bar, and a slide-in drawer for account
+status, the nutrition key, dark mode, and the daily calorie target) wraps the
+Log and Dashboard screens. Theme and calorie target are stored locally.
+
+The frontend lives alongside the API:
+
+- `app/page.tsx`, `app/dashboard/`, `app/login/`, `app/signup/`, `app/log/[date]/` — the screens
+- `components/web/` — header, tab bar, drawer, app shell, and SVG icons
+- `lib/client/` — browser-only API client, auth/guest identity, storage, and the theme/settings/drawer React contexts (kept separate from the server-only `lib/` modules)
+
 ## Identity & rate limiting
 
 Requests are attributed to one of:
@@ -103,15 +137,35 @@ See [`lib/schema.sql`](lib/schema.sql). Tables: `users`, `logs` (one per user pe
 ## Project layout
 
 ```
-app/api/
-  analyze/route.ts          POST  – analyze free text into a logged day
-  auth/login/route.ts       POST  – login
-  auth/signup/route.ts      POST  – signup (+ guest migration)
-  logs/route.ts             GET   – recent logs
-  logs/[date]/route.ts      GET/PATCH/DELETE – read/edit/delete a day
-  logs/[date]/edit/route.ts POST/PUT – LLM-assisted edit + persist
-  usage/route.ts            GET   – current usage
-lib/
+app/
+  page.tsx                  Log screen (home)
+  dashboard/page.tsx        Dashboard (today / week / month)
+  login/page.tsx            Log in
+  signup/page.tsx           Sign up (+ guest migration)
+  log/[date]/page.tsx       Day detail / inline + AI-assisted editing
+  layout.tsx                Root layout, fonts, providers
+  globals.css               Global styles + phone-width app shell
+  api/
+    analyze/route.ts          POST  – analyze free text into a logged day
+    auth/login/route.ts       POST  – login
+    auth/signup/route.ts      POST  – signup (+ guest migration)
+    logs/route.ts             GET   – recent logs
+    logs/[date]/route.ts      GET/PATCH/DELETE – read/edit/delete a day
+    logs/[date]/edit/route.ts POST/PUT – LLM-assisted edit + persist
+    usage/route.ts            GET   – current usage
+components/web/
+  AppProviders.tsx  theme/settings/drawer context providers + shell
+  AppChrome.tsx     header + scroll area + tab bar + drawer
+  Header.tsx        TabBar.tsx  Drawer.tsx  Spinner.tsx
+  icons/            FoodLoggerLogo, DashboardIcon, ProfileIcon
+lib/client/         browser-only frontend modules
+  apiClient.ts      same-origin API client + shared types
+  authClient.ts     JWT token storage / expiry handling
+  identity.ts       anonymous guest id (+ 7-day window)
+  storage.ts        localStorage wrapper (SSR-safe)
+  utils.ts          7-day window check
+  ThemeContext.tsx  SettingsContext.tsx  DrawerContext.tsx
+lib/                server-only modules
   llm.ts            Gemini-primary / Claude-fallback food analysis
   auth.ts           JWT + bcrypt helpers
   getUser.ts        identity resolution & rate-limit keying
