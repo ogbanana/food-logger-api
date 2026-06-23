@@ -18,7 +18,13 @@ export default function Header() {
         flexShrink: 0,
       }}
     >
-      <FoodLoggerLogo size={26} color={colors.textPrimary} accent={colors.calText} />
+      <FoodLoggerLogo
+        size={26}
+        color={colors.textPrimary}
+        bottle="#2563EB"
+        apple="#E03131"
+        stem="#2F9E44"
+      />
       <span
         style={{
           fontSize: 20,

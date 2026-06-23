@@ -17,11 +17,7 @@ import { useSettings } from "../../lib/client/SettingsContext";
 import { useDrawer } from "../../lib/client/DrawerContext";
 import FoodLoggerLogo from "./icons/FoodLoggerLogo";
 import InstallButton from "./InstallButton";
-import {
-  PersonIcon,
-  HourglassIcon,
-  CheckIcon,
-} from "./icons/EmojiIcons";
+import { PersonIcon, HourglassIcon, CheckIcon } from "./icons/EmojiIcons";
 
 const DRAWER_WIDTH = "78%";
 
@@ -82,7 +78,13 @@ export default function Drawer() {
         {/* Header */}
         <div style={s.drawerHeader}>
           <div style={s.drawerHeaderTitleRow}>
-            <FoodLoggerLogo size={26} color="#FFFFFF" accent="#FFFFFF" />
+            <FoodLoggerLogo
+              size={26}
+              color="#FFFFFF"
+              bottle="#2563EB"
+              apple="#E03131"
+              stem="#2F9E44"
+            />
             <span style={s.appName}>Food Logger</span>
           </div>
           <span style={s.appTagline}>Your personal food brain dump</span>
@@ -161,19 +163,47 @@ export default function Drawer() {
             </>
           )}
 
-          <InstallButton />
-
           <div style={s.divider} />
 
           {/* Nutrition key */}
           <div style={s.section}>
             <div style={s.sectionLabel}>NUTRITION KEY</div>
             <div style={s.legendGrid}>
-              <LegendRow label="Protein (g)" pill="P" pillBg={colors.proteinBg} pillText={colors.proteinText} colors={colors} />
-              <LegendRow label="Carbohydrates (g)" pill="Cb" pillBg={colors.carbsBg} pillText={colors.carbsText} colors={colors} />
-              <LegendRow label="Fat (g)" pill="F" pillBg={colors.fatBg} pillText={colors.fatText} colors={colors} />
-              <LegendRow label="Fiber (g)" pill="Fi" pillBg={colors.fiberBg} pillText={colors.fiberText} colors={colors} />
-              <LegendRow label="Calories (kcal)" pill="C" pillBg={colors.calBg} pillText={colors.calText} colors={colors} />
+              <LegendRow
+                label="Protein (g)"
+                pill="P"
+                pillBg={colors.proteinBg}
+                pillText={colors.proteinText}
+                colors={colors}
+              />
+              <LegendRow
+                label="Carbohydrates (g)"
+                pill="Cb"
+                pillBg={colors.carbsBg}
+                pillText={colors.carbsText}
+                colors={colors}
+              />
+              <LegendRow
+                label="Fat (g)"
+                pill="F"
+                pillBg={colors.fatBg}
+                pillText={colors.fatText}
+                colors={colors}
+              />
+              <LegendRow
+                label="Fiber (g)"
+                pill="Fi"
+                pillBg={colors.fiberBg}
+                pillText={colors.fiberText}
+                colors={colors}
+              />
+              <LegendRow
+                label="Calories (kcal)"
+                pill="C"
+                pillBg={colors.calBg}
+                pillText={colors.calText}
+                colors={colors}
+              />
             </div>
           </div>
 
@@ -201,7 +231,11 @@ export default function Drawer() {
                           ...(active ? s.segBtnActive : {}),
                         }}
                       >
-                        {m === "auto" ? "Auto" : m === "dark" ? "Dark" : "Light"}
+                        {m === "auto"
+                          ? "Auto"
+                          : m === "dark"
+                            ? "Dark"
+                            : "Light"}
                       </button>
                     );
                   })}
@@ -267,7 +301,11 @@ export default function Drawer() {
             </div>
           </div>
 
-          <div style={{ height: 32 }} />
+          <div style={s.divider} />
+
+          <div style={s.section}>
+            <InstallButton />
+          </div>
         </div>
       </div>
     </>
@@ -288,7 +326,14 @@ function LegendRow({
   colors: Colors;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
       <div
         style={{
           width: 28,
@@ -353,9 +398,20 @@ function makeStyles(
       gap: 8,
       marginBottom: 4,
     },
-    appName: { fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: -0.3 },
+    appName: {
+      fontSize: 22,
+      fontWeight: 700,
+      color: "#FFFFFF",
+      letterSpacing: -0.3,
+    },
     appTagline: { fontSize: 13, color: "rgba(255,255,255,0.55)" },
-    body: { flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column" },
+    body: {
+      flex: 1,
+      overflowY: "auto",
+      padding: 16,
+      display: "flex",
+      flexDirection: "column",
+    },
     guestCard: {
       padding: 14,
       backgroundColor: colors.surfaceAlt,
@@ -389,7 +445,12 @@ function makeStyles(
       gap: 6,
     },
     guestExpiryUrgent: { color: colors.error },
-    authSection: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12 },
+    authSection: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      marginTop: 12,
+    },
     signUpBtn: {
       backgroundColor: colors.primary,
       color: colors.primaryText,
@@ -491,7 +552,12 @@ function makeStyles(
       fontWeight: 600,
       boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
     },
-    targetEditRow: { display: "flex", flexDirection: "row", alignItems: "center", gap: 8 },
+    targetEditRow: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
     targetInput: {
       flex: 1,
       minWidth: 0,
