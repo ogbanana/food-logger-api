@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import AppChrome from "../components/web/AppChrome";
 import Spinner from "../components/web/Spinner";
 import DateTimeHeader from "../components/web/DateTimeHeader";
@@ -8,6 +9,7 @@ import { SteakIcon } from "../components/web/icons/EmojiIcons";
 import {
   analyzeFood,
   addMealsToDay,
+  resolveDate,
   fetchUsage,
   type CalorieLog,
   type Meal,
@@ -15,7 +17,16 @@ import {
   type MessageType,
 } from "../lib/client/apiClient";
 import { useTheme, type Colors } from "../lib/client/ThemeContext";
-import { localDateStr, parseLocalDate } from "../lib/client/utils";
+import {
+  localDateStr,
+  parseLocalDate,
+  isWithinSevenDays,
+} from "../lib/client/utils";
+
+// Shown after a past-day log (or when a day is out of range) to point users at
+// the dashboard calendar for older days.
+const PREV_DAY_GUIDE =
+  "To log food for previous days, head to Dashboard → Month and tap the day. You can only update food logs up to 7 days ago.";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -49,9 +60,16 @@ export default function LogScreen() {
   const [history, setHistory] = useState<Message[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [limit, setLimit] = useState(20);
+  // A parsed log awaiting the user's confirmation of which past day it's for.
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    data: CalorieLog;
+    date: string;
+    originalText: string;
+  } | null>(null);
   const [example, setExample] = useState(EXAMPLES[0]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { colors } = useTheme();
+  const router = useRouter();
 
   useEffect(() => {
     // Randomize the placeholder example after mount (not during render) so the
@@ -78,6 +96,14 @@ export default function LogScreen() {
     if (!input.trim() || loading) return;
     const text = input.trim();
     setInput("");
+
+    // While a past-day confirmation is open, route the message to the
+    // yes / no / clarify handler instead of starting a new analysis.
+    if (pendingConfirm) {
+      await handleConfirmReply(text);
+      return;
+    }
+
     setLoading(true);
     setMessages(prev => [...prev, { type: "user", text }]);
     scrollToEnd();
@@ -93,18 +119,22 @@ export default function LogScreen() {
       if (typeof data.remaining === "number") setRemaining(data.remaining);
       if (typeof data.limit === "number") setLimit(data.limit);
 
-      // The text looks like it's for a different day — ask before logging, then
-      // append to that day rather than overwriting it.
-      if (data.needs_confirmation) {
-        setMessages(prev => [
-          ...prev,
-          {
-            type: "confirm",
-            data,
-            inferredDate: data.inferred_date,
-            outOfRange: data.out_of_range,
-          },
-        ]);
+      // Not a food log (greeting, question, small talk) — reply conversationally,
+      // don't show a calorie card, and nothing was logged or counted.
+      if (data.is_food_log === false) {
+        const reply =
+          data.reply?.trim() || "Tell me what you ate and I'll log it for you.";
+        setHistory([...newHistory, { role: "assistant", content: reply }]);
+        setMessages(prev => [...prev, { type: "assistant", text: reply }]);
+        return;
+      }
+
+      // The text looks like it's for a different day — open a confirmation the
+      // user can answer with yes / no / a corrected day, then append to that day
+      // rather than overwriting it.
+      if (data.needs_confirmation && data.inferred_date) {
+        setPendingConfirm({ data, date: data.inferred_date, originalText: text });
+        scrollToEnd();
         return;
       }
 
@@ -143,33 +173,106 @@ export default function LogScreen() {
     }
   }
 
-  // Confirm logging a flagged message to a chosen day (appends, no LLM/charge).
-  async function confirmLog(
-    index: number,
-    targetDate: string,
-    label: string,
-    data: CalorieLog,
-  ) {
-    setMessages(prev =>
-      prev.map((m, i) => (i === index ? { ...m, pending: true } : m)),
-    );
+  function pushAssistant(text: string) {
+    setMessages(prev => [...prev, { type: "assistant", text }]);
     scrollToEnd();
-    try {
-      await addMealsToDay(targetDate, data, localDateStr());
-      setMessages(prev =>
-        prev.map((m, i) =>
-          i === index ? { ...m, pending: false, doneLabel: label } : m,
-        ),
+  }
+
+  // The dashboard-calendar guide, with a button to jump straight to Month view.
+  function pushGuide() {
+    setMessages(prev => [...prev, { type: "guide", text: PREV_DAY_GUIDE }]);
+    scrollToEnd();
+  }
+
+  // Append the parsed meals to the confirmed past day (no LLM, no charge), or
+  // explain that the day is outside the editable window.
+  async function commitConfirm(pc: NonNullable<typeof pendingConfirm>) {
+    const label = dayLabel(pc.date, localDateStr());
+    if (!isWithinSevenDays(pc.date)) {
+      setPendingConfirm(null);
+      pushAssistant(
+        `${label} is more than 7 days ago and can no longer be edited.`,
       );
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setMessages(prev => [
-        ...prev.map((m, i) => (i === index ? { ...m, pending: false } : m)),
-        { type: "error", text: message },
-      ]);
-    } finally {
-      scrollToEnd();
+      pushGuide();
+      return;
     }
+    setLoading(true);
+    try {
+      await addMealsToDay(pc.date, pc.data, localDateStr());
+      setPendingConfirm(null);
+      setMessages(prev => [...prev, { type: "result", data: pc.data }]);
+      pushAssistant(`✓ Logged to ${label}.`);
+      pushGuide();
+    } catch (err: unknown) {
+      pushAssistant(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function cancelConfirm() {
+    setPendingConfirm(null);
+    pushAssistant("Okay, I won't log that. Tell me what you ate whenever you're ready.");
+  }
+
+  // Interpret a typed reply to an open confirmation: yes / no / a corrected day.
+  async function handleConfirmReply(text: string) {
+    const pc = pendingConfirm;
+    if (!pc) return;
+    setMessages(prev => [...prev, { type: "user", text }]);
+    scrollToEnd();
+
+    const reply = text.trim().toLowerCase();
+
+    // Priority 1: does the reply name a day/date? If so it's a correction
+    // (e.g. "No, Sunday 6/21") — re-resolve the day before reading it as yes/no.
+    const mentionsDay =
+      /\b(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday|yesterday|today|tonight|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/.test(
+        reply,
+      ) ||
+      /\d{1,2}\s*\/\s*\d{1,2}/.test(reply) || // 6/21
+      /\b\d{1,2}(st|nd|rd|th)\b/.test(reply) || // 21st
+      /\b\d+\s+days?\s+ago\b/.test(reply) || // 3 days ago
+      /\b(last|this|the)\s+\w+/.test(reply) || // last sunday, the 21st, day before
+      /\bday before\b/.test(reply);
+
+    if (mentionsDay) {
+      setLoading(true);
+      try {
+        const newDate = await resolveDate(
+          `${pc.originalText}. ${text}`,
+          localDateStr(),
+        );
+        if (newDate) {
+          setPendingConfirm({ ...pc, date: newDate });
+          return;
+        }
+        // Heuristic matched but no concrete date resolved — fall through.
+      } catch (err: unknown) {
+        pushAssistant(err instanceof Error ? err.message : "Unknown error");
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Priority 2: plain confirm / cancel.
+    if (
+      /^(y|yes|yep|yeah|yup|sure|ok|okay|correct|confirm|right|do it|log it|sounds good)\b/.test(
+        reply,
+      )
+    ) {
+      await commitConfirm(pc);
+      return;
+    }
+    if (/^(n|no|nope|nah|cancel|stop|never ?mind|don'?t)\b/.test(reply)) {
+      cancelConfirm();
+      return;
+    }
+
+    pushAssistant(
+      "I didn't catch that — reply yes to log it, no to cancel, or tell me the day, like “last Sunday” or “June 21”.",
+    );
   }
 
   const s = makeStyles(colors);
@@ -201,6 +304,26 @@ export default function LogScreen() {
                   </div>
                 );
               }
+              if (msg.type === "assistant") {
+                return (
+                  <div key={i} style={s.assistantBubble}>
+                    <span style={s.assistantText}>{msg.text}</span>
+                  </div>
+                );
+              }
+              if (msg.type === "guide") {
+                return (
+                  <div key={i} style={s.assistantBubble}>
+                    <span style={s.assistantText}>{msg.text}</span>
+                    <button
+                      style={s.guideBtn}
+                      onClick={() => router.push("/dashboard?view=month")}
+                    >
+                      Open Dashboard → Month
+                    </button>
+                  </div>
+                );
+              }
               if (msg.type === "error") {
                 return (
                   <div key={i} style={s.errorBubble}>
@@ -218,22 +341,22 @@ export default function LogScreen() {
               if (msg.type === "result" && msg.data) {
                 return <ResultCard key={i} data={msg.data} colors={colors} />;
               }
-              if (msg.type === "confirm" && msg.data) {
-                return (
-                  <ConfirmCard
-                    key={i}
-                    msg={msg}
-                    colors={colors}
-                    onChoose={(targetDate, label) =>
-                      confirmLog(i, targetDate, label, msg.data!)
-                    }
-                  />
-                );
-              }
               return null;
             })}
 
-            {loading && (
+            {pendingConfirm && (
+              <ConfirmCard
+                data={pendingConfirm.data}
+                date={pendingConfirm.date}
+                today={localDateStr()}
+                colors={colors}
+                loading={loading}
+                onYes={() => commitConfirm(pendingConfirm)}
+                onNo={cancelConfirm}
+              />
+            )}
+
+            {loading && !pendingConfirm && (
               <div style={s.assistantBubble}>
                 <Spinner size={18} color={colors.textMuted} />
               </div>
@@ -264,7 +387,11 @@ export default function LogScreen() {
         <div style={s.inputArea}>
           <textarea
             style={s.textInput}
-            placeholder="Tell me everything you ate today..."
+            placeholder={
+              pendingConfirm
+                ? "Reply yes, no, or the correct day…"
+                : "Tell me everything you ate today..."
+            }
             value={input}
             onChange={e => setInput(e.target.value)}
             rows={3}
@@ -277,7 +404,7 @@ export default function LogScreen() {
             onClick={analyze}
             disabled={!input.trim() || loading}
           >
-            Analyze
+            {pendingConfirm ? "Send" : "Analyze"}
           </button>
         </div>
       </div>
@@ -326,30 +453,31 @@ function ResultCard({ data, colors }: { data: CalorieLog; colors: Colors }) {
 }
 
 function ConfirmCard({
-  msg,
+  data,
+  date,
+  today,
   colors,
-  onChoose,
+  loading,
+  onYes,
+  onNo,
 }: {
-  msg: MessageType;
+  data: CalorieLog;
+  date: string;
+  today: string;
   colors: Colors;
-  onChoose: (targetDate: string, label: string) => void;
+  loading: boolean;
+  onYes: () => void;
+  onNo: () => void;
 }) {
   const s = makeStyles(colors);
-  const data = msg.data!;
-  const today = localDateStr();
-  const label = msg.inferredDate ? dayLabel(msg.inferredDate, today) : "another day";
-  const done = !!msg.doneLabel;
+  const label = dayLabel(date, today);
+  const inRange = isWithinSevenDays(date);
 
   return (
     <div style={s.confirmCard}>
-      {done ? (
-        <div style={s.confirmHeaderDone}>✓ Added to {msg.doneLabel}</div>
-      ) : (
-        <div style={s.confirmHeader}>
-          This looks like it&apos;s for <strong>{label}</strong> — not today.
-          Where should it go?
-        </div>
-      )}
+      <div style={s.confirmHeader}>
+        This looks like it&apos;s for <strong>{label}</strong> — not today.
+      </div>
 
       {data.meals.map((meal, i) => (
         <MealCard key={i} meal={meal} colors={colors} />
@@ -361,39 +489,31 @@ function ConfirmCard({
         {data.totals.fat_g}g · Fi{data.totals.fiber_g}g
       </div>
 
-      {!done &&
-        (msg.pending ? (
-          <div style={s.confirmPending}>
-            <Spinner size={16} color={colors.textMuted} />
+      {loading ? (
+        <div style={s.confirmPending}>
+          <Spinner size={16} color={colors.textMuted} />
+        </div>
+      ) : inRange ? (
+        <>
+          <div style={s.confirmNote}>
+            Reply <strong>yes</strong> to log it there, <strong>no</strong> to
+            cancel, or tell me the correct day.
           </div>
-        ) : msg.outOfRange ? (
-          <>
-            <div style={s.confirmNote}>
-              That day is more than 7 days ago, so it can&apos;t be saved there.
-            </div>
-            <button
-              style={s.confirmBtnPrimary}
-              onClick={() => onChoose(today, "Today")}
-            >
-              Log as today instead
-            </button>
-          </>
-        ) : (
           <div style={s.confirmActions}>
-            <button
-              style={s.confirmBtnSecondary}
-              onClick={() => onChoose(today, "Today")}
-            >
-              It&apos;s for today
+            <button style={s.confirmBtnSecondary} onClick={onNo}>
+              No
             </button>
-            <button
-              style={s.confirmBtnPrimary}
-              onClick={() => onChoose(msg.inferredDate!, label)}
-            >
-              Add to {label}
+            <button style={s.confirmBtnPrimary} onClick={onYes}>
+              Yes, log to {label}
             </button>
           </div>
-        ))}
+        </>
+      ) : (
+        <div style={s.confirmNote}>
+          {label} is more than 7 days ago, so it can&apos;t be edited. Tell me a
+          more recent day, or say <strong>no</strong> to cancel.
+        </div>
+      )}
     </div>
   );
 }
@@ -501,6 +621,19 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       color: colors.textPrimary,
     },
     italic: { fontStyle: "italic" },
+
+    guideBtn: {
+      display: "block",
+      marginTop: 10,
+      backgroundColor: colors.primary,
+      color: colors.primaryText,
+      border: "none",
+      borderRadius: 12,
+      padding: "9px 14px",
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: 600,
+    },
 
     userBubble: {
       backgroundColor: colors.userBubbleBg,

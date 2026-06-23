@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppChrome from "../../components/web/AppChrome";
 import Spinner from "../../components/web/Spinner";
 import { SaladIcon } from "../../components/web/icons/EmojiIcons";
+import PenIcon from "../../components/web/icons/PenIcon";
 import DateTimeHeader from "../../components/web/DateTimeHeader";
 import { fetchWeekLogs, type DailyLog } from "../../lib/client/apiClient";
 import {
@@ -98,6 +99,13 @@ export default function DashboardScreen() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
+    // Open directly to Month when linked from the Log screen's guide.
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("view") === "month"
+    ) {
+      setRange("month");
+    }
   }, []);
 
   const todayStr = localDateStr();
@@ -207,19 +215,73 @@ export default function DashboardScreen() {
                   hero
                 />
                 <div style={s.summaryGrid}>
-                  <SummaryCard label="Protein" value={`${totalProtein}g`} unit="today" color={colors.proteinText} colors={colors} />
-                  <SummaryCard label="Carbs" value={`${totalCarbs}g`} unit="today" color={colors.carbsText} colors={colors} />
-                  <SummaryCard label="Fat" value={`${totalFat}g`} unit="today" color={colors.fatText} colors={colors} />
-                  <SummaryCard label="Fiber" value={`${totalFiber}g`} unit="today" color={colors.fiberText} colors={colors} />
+                  <SummaryCard
+                    label="Protein"
+                    value={`${totalProtein}g`}
+                    unit="today"
+                    color={colors.proteinText}
+                    colors={colors}
+                  />
+                  <SummaryCard
+                    label="Carbs"
+                    value={`${totalCarbs}g`}
+                    unit="today"
+                    color={colors.carbsText}
+                    colors={colors}
+                  />
+                  <SummaryCard
+                    label="Fat"
+                    value={`${totalFat}g`}
+                    unit="today"
+                    color={colors.fatText}
+                    colors={colors}
+                  />
+                  <SummaryCard
+                    label="Fiber"
+                    value={`${totalFiber}g`}
+                    unit="today"
+                    color={colors.fiberText}
+                    colors={colors}
+                  />
                 </div>
               </>
             ) : (
               <div style={s.summaryGrid}>
-                <SummaryCard label="Avg Calories" value={String(avgCals)} unit="kcal" color={colors.calText} colors={colors} />
-                <SummaryCard label="Avg Protein" value={`${avgProtein}g`} unit="avg." color={colors.proteinText} colors={colors} />
-                <SummaryCard label="Avg Carbs" value={`${avgCarbs}g`} unit="avg." color={colors.carbsText} colors={colors} />
-                <SummaryCard label="Avg Fat" value={`${avgFat}g`} unit="avg." color={colors.fatText} colors={colors} />
-                <SummaryCard label="Avg Fiber" value={`${avgFiber}g`} unit="avg." color={colors.fiberText} colors={colors} />
+                <SummaryCard
+                  label="Avg Calories"
+                  value={String(avgCals)}
+                  unit="kcal"
+                  color={colors.calText}
+                  colors={colors}
+                />
+                <SummaryCard
+                  label="Avg Protein"
+                  value={`${avgProtein}g`}
+                  unit="avg."
+                  color={colors.proteinText}
+                  colors={colors}
+                />
+                <SummaryCard
+                  label="Avg Carbs"
+                  value={`${avgCarbs}g`}
+                  unit="avg."
+                  color={colors.carbsText}
+                  colors={colors}
+                />
+                <SummaryCard
+                  label="Avg Fat"
+                  value={`${avgFat}g`}
+                  unit="avg."
+                  color={colors.fatText}
+                  colors={colors}
+                />
+                <SummaryCard
+                  label="Avg Fiber"
+                  value={`${avgFiber}g`}
+                  unit="avg."
+                  color={colors.fiberText}
+                  colors={colors}
+                />
               </div>
             )}
 
@@ -233,21 +295,55 @@ export default function DashboardScreen() {
                       ...s.progressFill,
                       width: `${Math.min((todayLog.cal_high / target) * 100, 100)}%`,
                       backgroundColor:
-                        todayLog.cal_high > target ? colors.error : colors.calText,
+                        todayLog.cal_high > target
+                          ? colors.error
+                          : colors.calText,
                     }}
                   />
                 </div>
                 <div style={s.progressLabels}>
-                  <span style={s.progressSide}>{todayLog.cal_low} kcal low</span>
+                  <span style={s.progressSide}>
+                    {todayLog.cal_low} kcal low
+                  </span>
                   <span style={s.progressMid}>{target} kcal goal</span>
-                  <span style={s.progressSide}>{todayLog.cal_high} kcal high</span>
+                  <span style={s.progressSide}>
+                    {todayLog.cal_high} kcal high
+                  </span>
                 </div>
 
                 <div style={{ ...s.cardLabel, marginTop: 16 }}>MACROS</div>
-                <MacroBar label="Protein" value={todayLog.protein_g} max={200} color={colors.proteinText} bg={colors.proteinBg} colors={colors} />
-                <MacroBar label="Carbs" value={todayLog.carbs_g} max={300} color={colors.carbsText} bg={colors.carbsBg} colors={colors} />
-                <MacroBar label="Fat" value={todayLog.fat_g} max={100} color={colors.fatText} bg={colors.fatBg} colors={colors} />
-                <MacroBar label="Fiber" value={todayLog.fiber_g} max={50} color={colors.fiberText} bg={colors.fiberBg} colors={colors} />
+                <MacroBar
+                  label="Protein"
+                  value={todayLog.protein_g}
+                  max={200}
+                  color={colors.proteinText}
+                  bg={colors.proteinBg}
+                  colors={colors}
+                />
+                <MacroBar
+                  label="Carbs"
+                  value={todayLog.carbs_g}
+                  max={300}
+                  color={colors.carbsText}
+                  bg={colors.carbsBg}
+                  colors={colors}
+                />
+                <MacroBar
+                  label="Fat"
+                  value={todayLog.fat_g}
+                  max={100}
+                  color={colors.fatText}
+                  bg={colors.fatBg}
+                  colors={colors}
+                />
+                <MacroBar
+                  label="Fiber"
+                  value={todayLog.fiber_g}
+                  max={50}
+                  color={colors.fiberText}
+                  bg={colors.fiberBg}
+                  colors={colors}
+                />
               </div>
             )}
 
@@ -269,7 +365,9 @@ export default function DashboardScreen() {
                     const date = new Date();
                     date.setDate(date.getDate() - (6 - i));
                     const dateStr = localDateStr(date);
-                    const entry = weekLogs.find(l => l.date.startsWith(dateStr));
+                    const entry = weekLogs.find(l =>
+                      l.date.startsWith(dateStr),
+                    );
                     const heightPct = entry
                       ? entry.cal_high /
                         Math.max(...weekLogs.map(l => l.cal_high), target)
@@ -279,7 +377,9 @@ export default function DashboardScreen() {
 
                     return (
                       <div key={i} style={s.barCol}>
-                        <div style={s.barValue}>{entry ? entry.cal_high : ""}</div>
+                        <div style={s.barValue}>
+                          {entry ? entry.cal_high : ""}
+                        </div>
                         <div style={s.barTrack}>
                           <div style={{ flex: 1 - heightPct }} />
                           <div
@@ -319,7 +419,10 @@ export default function DashboardScreen() {
                     })}
                   </span>
                   {monthOffset < 0 ? (
-                    <button style={s.calNavBtn} onClick={() => navigateMonth(1)}>
+                    <button
+                      style={s.calNavBtn}
+                      onClick={() => navigateMonth(1)}
+                    >
                       <span style={s.calNavArrow}>›</span>
                     </button>
                   ) : (
@@ -365,10 +468,42 @@ export default function DashboardScreen() {
                       </span>
                     </div>
                     <div style={s.macroRow}>
-                      <span style={{ ...s.pill, backgroundColor: colors.proteinBg, color: colors.proteinText }}>P {entry.protein_g}g</span>
-                      <span style={{ ...s.pill, backgroundColor: colors.carbsBg, color: colors.carbsText }}>Cb {entry.carbs_g}g</span>
-                      <span style={{ ...s.pill, backgroundColor: colors.fatBg, color: colors.fatText }}>F {entry.fat_g}g</span>
-                      <span style={{ ...s.pill, backgroundColor: colors.fiberBg, color: colors.fiberText }}>Fi {entry.fiber_g}g</span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.proteinBg,
+                          color: colors.proteinText,
+                        }}
+                      >
+                        P {entry.protein_g}g
+                      </span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.carbsBg,
+                          color: colors.carbsText,
+                        }}
+                      >
+                        Cb {entry.carbs_g}g
+                      </span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.fatBg,
+                          color: colors.fatText,
+                        }}
+                      >
+                        F {entry.fat_g}g
+                      </span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.fiberBg,
+                          color: colors.fiberText,
+                        }}
+                      >
+                        Fi {entry.fiber_g}g
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -400,12 +535,23 @@ function SummaryCard({
   return (
     <div style={{ ...s.summaryCard, ...(hero ? s.summaryCardHero : {}) }}>
       <div style={s.summaryCellLeft}>
-        <span style={{ ...s.summaryCellLabel, ...(hero ? s.summaryCellLabelHero : {}) }}>
+        <span
+          style={{
+            ...s.summaryCellLabel,
+            ...(hero ? s.summaryCellLabelHero : {}),
+          }}
+        >
           {label}
         </span>
         <span style={s.summaryCellUnit}>{unit}</span>
       </div>
-      <span style={{ ...s.summaryCellValue, color, ...(hero ? s.summaryCellValueHero : {}) }}>
+      <span
+        style={{
+          ...s.summaryCellValue,
+          color,
+          ...(hero ? s.summaryCellValueHero : {}),
+        }}
+      >
         {value}
       </span>
     </div>
@@ -433,7 +579,13 @@ function MacroBar({
     <div style={s.macroBarRow}>
       <span style={s.macroBarLabel}>{label}</span>
       <div style={{ ...s.macroBarTrack, backgroundColor: bg }}>
-        <div style={{ ...s.macroBarFill, width: `${pct}%`, backgroundColor: color }} />
+        <div
+          style={{
+            ...s.macroBarFill,
+            width: `${pct}%`,
+            backgroundColor: color,
+          }}
+        />
       </div>
       <span style={{ ...s.macroBarValue, color }}>{value}g</span>
     </div>
@@ -485,7 +637,10 @@ function CalendarGrid({
     const entry = logMap[dateStr];
     const isToday = dateStr === todayStr;
     const overTarget = entry && entry.cal_high > target;
-    const editable = !entry && isWithinSevenDays(dateStr);
+    // A day is editable when it falls inside the 7-day window (whether or not it
+    // already has a log) — those get a pen affordance.
+    const editableDay = isWithinSevenDays(dateStr);
+    const editable = !entry && editableDay;
     const avgCal = entry ? Math.round((entry.cal_low + entry.cal_high) / 2) : 0;
     const clickable = !!entry || editable;
 
@@ -500,6 +655,7 @@ function CalendarGrid({
         style={{
           ...s.calCell,
           ...s.calCellFilled,
+          position: "relative",
           cursor: clickable ? "pointer" : "default",
           ...(entry && !overTarget ? { backgroundColor: colors.calBg } : {}),
           ...(overTarget ? { backgroundColor: colors.errorBg } : {}),
@@ -507,6 +663,11 @@ function CalendarGrid({
           ...(editable ? s.calCellEditable : {}),
         }}
       >
+        {editableDay && (
+          <span style={s.calPen}>
+            <PenIcon size={14} color={colors.textMuted} />
+          </span>
+        )}
         <span style={{ ...s.calDayNum, ...(isToday ? s.calDayNumToday : {}) }}>
           {day}
         </span>
@@ -607,9 +768,18 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
     },
     emptyIcon: { fontSize: 48 },
     emptyTitle: { fontSize: 18, fontWeight: 500, color: colors.textPrimary },
-    emptySubtitle: { fontSize: 14, color: colors.textSecondary, textAlign: "center" },
+    emptySubtitle: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
 
-    summaryGrid: { display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    summaryGrid: {
+      display: "flex",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
     summaryCard: {
       width: "47.5%",
       backgroundColor: colors.surface,
@@ -626,9 +796,17 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
     summaryCardHero: { width: "100%", padding: "20px 18px" },
     summaryCellLeft: { display: "flex", flexDirection: "column", gap: 3 },
     summaryCellLabel: { fontSize: 11, color: colors.textSecondary },
-    summaryCellLabelHero: { fontSize: 14, fontWeight: 500, color: colors.textSecondary },
+    summaryCellLabelHero: {
+      fontSize: 14,
+      fontWeight: 500,
+      color: colors.textSecondary,
+    },
     summaryCellValue: { fontSize: 22, fontWeight: 500 },
-    summaryCellValueHero: { fontSize: 34, fontWeight: 600, letterSpacing: -0.5 },
+    summaryCellValueHero: {
+      fontSize: 34,
+      fontWeight: 600,
+      letterSpacing: -0.5,
+    },
     summaryCellUnit: { fontSize: 11, color: colors.textMuted },
 
     card: {
@@ -670,10 +848,21 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       gap: 8,
       marginBottom: 8,
     },
-    macroBarLabel: { fontSize: 12, color: colors.textSecondary, width: 48, flexShrink: 0 },
+    macroBarLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      width: 48,
+      flexShrink: 0,
+    },
     macroBarTrack: { flex: 1, height: 8, borderRadius: 99, overflow: "hidden" },
     macroBarFill: { height: "100%", borderRadius: 99 },
-    macroBarValue: { fontSize: 12, fontWeight: 500, width: 36, textAlign: "right", flexShrink: 0 },
+    macroBarValue: {
+      fontSize: 12,
+      fontWeight: 500,
+      width: 36,
+      textAlign: "right",
+      flexShrink: 0,
+    },
 
     chart: {
       display: "flex",
@@ -691,10 +880,25 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       justifyContent: "flex-end",
     },
     barValue: { fontSize: 9, color: colors.textSecondary, marginBottom: 2 },
-    barTrack: { width: "80%", flex: 1, display: "flex", flexDirection: "column" },
+    barTrack: {
+      width: "80%",
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+    },
     barFill: { borderRadius: 4 },
-    barLabel: { fontSize: 9, color: colors.textSecondary, marginTop: 4, textAlign: "center" },
-    chartTargetNote: { fontSize: 11, color: colors.textMuted, marginTop: 8, textAlign: "center" },
+    barLabel: {
+      fontSize: 9,
+      color: colors.textSecondary,
+      marginTop: 4,
+      textAlign: "center",
+    },
+    chartTargetNote: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 8,
+      textAlign: "center",
+    },
 
     sectionLabel: {
       fontSize: 11,
@@ -725,7 +929,12 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
     dayDate: { fontSize: 14, fontWeight: 500, color: colors.textPrimary },
     dayCals: { fontSize: 13, color: colors.calText, fontWeight: 500 },
     dayCalsOver: { color: colors.error },
-    macroRow: { display: "flex", flexDirection: "row", gap: 6, flexWrap: "wrap" },
+    macroRow: {
+      display: "flex",
+      flexDirection: "row",
+      gap: 6,
+      flexWrap: "wrap",
+    },
 
     pill: {
       padding: "3px 10px",
@@ -764,6 +973,13 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
     calDayNumToday: { color: colors.textPrimary },
     calCals: { fontSize: 9, color: colors.textMuted },
     calCellEditable: { border: `0.5px dashed ${colors.borderStrong}` },
+    calPen: {
+      position: "absolute",
+      top: 3,
+      right: 4,
+      display: "flex",
+      lineHeight: 0,
+    },
 
     viewDayBtn: {
       padding: 13,

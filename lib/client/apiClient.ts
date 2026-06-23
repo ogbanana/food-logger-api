@@ -76,6 +76,21 @@ export async function analyzeFood(
   return raw as AnalyzeResponse;
 }
 
+/** Resolve a clarified day reference to a YYYY-MM-DD date (or null). No food charge. */
+export async function resolveDate(
+  text: string,
+  today: string,
+): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/api/resolve-date`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ text, today }),
+  });
+  const raw = await res.json();
+  if (raw.error) throw new Error(raw.error);
+  return (raw.date as string | null) ?? null;
+}
+
 export async function fetchUsage(): Promise<{
   count: number;
   remaining: number;
@@ -239,6 +254,8 @@ export type CalorieLog = {
   };
   closing?: string;
   log_date?: string;
+  is_food_log?: boolean;
+  reply?: string;
 };
 
 export type Message = {
@@ -247,7 +264,7 @@ export type Message = {
 };
 
 export type MessageType = {
-  type: "user" | "result" | "error" | "confirm";
+  type: "user" | "result" | "error" | "confirm" | "assistant" | "guide";
   text?: string;
   data?: CalorieLog;
   // For "confirm" messages (logging to a day other than today):
@@ -260,6 +277,9 @@ export type MessageType = {
 export type AnalyzeResponse = CalorieLog & {
   remaining?: number;
   limit?: number;
+  /** When false, the message wasn't a food log; show `reply` instead of a card. */
+  is_food_log?: boolean;
+  reply?: string;
   /** Set when the model thinks the text is for a day other than today. */
   inferred_date?: string;
   needs_confirmation?: boolean;
