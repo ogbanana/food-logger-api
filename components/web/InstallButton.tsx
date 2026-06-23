@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTheme, type Colors } from "../../lib/client/ThemeContext";
 
 // The browser fires `beforeinstallprompt` before the native install UI; we
@@ -11,14 +11,27 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+// Which iOS browser the user is in. "Add to Home Screen" lives in a different
+// place per browser: Safari exposes it in the system share sheet, while Chrome
+// for iOS (122+) has its own menu item — sharing from Chrome does NOT surface
+// it, since that share-sheet action is Safari-provided.
+type IOSBrowser = "safari" | "chrome" | "other";
+
+// iOS fires no `appinstalled` event and the browser tab never goes standalone,
+// so we can't detect an iOS install — instead the user can confirm it manually
+// and we remember that choice here.
+const DISMISSED_KEY = "a2hs-dismissed";
+
 export default function InstallButton() {
   const { colors } = useTheme();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(
     null,
   );
   const [installed, setInstalled] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const [iosBrowser, setIosBrowser] = useState<IOSBrowser | null>(null);
   const [showIOSHelp, setShowIOSHelp] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const helpRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Read platform/install state once on mount (browser-only APIs).
@@ -26,9 +39,26 @@ export default function InstallButton() {
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       nav.standalone === true;
+    const ua = navigator.userAgent;
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+    let wasDismissed = false;
+    try {
+      wasDismissed = localStorage.getItem(DISMISSED_KEY) === "1";
+    } catch {
+      // localStorage can throw in private mode; treat as not dismissed.
+    }
     /* eslint-disable react-hooks/set-state-in-effect */
     setInstalled(standalone);
-    setIsIOS(/iphone|ipad|ipod/i.test(navigator.userAgent));
+    setDismissed(wasDismissed);
+    setIosBrowser(
+      isIOS
+        ? /CriOS/i.test(ua)
+          ? "chrome"
+          : /FxiOS|EdgiOS|OPiOS|GSA/i.test(ua)
+            ? "other"
+            : "safari"
+        : null,
+    );
     /* eslint-enable react-hooks/set-state-in-effect */
 
     const onPrompt = (e: Event) => {
@@ -47,13 +77,21 @@ export default function InstallButton() {
     };
   }, []);
 
-  // Already installed — nothing to do.
-  if (installed) return null;
+  // The help text expands below the button, which sits at the bottom of the
+  // scrollable drawer — scroll it into view so it isn't revealed below the fold.
+  useEffect(() => {
+    if (showIOSHelp) {
+      helpRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [showIOSHelp]);
+
+  // Already installed, or the user confirmed they added it — nothing to do.
+  if (installed || dismissed) return null;
   // Non-iOS browsers only get the button once the install prompt is available.
-  if (!isIOS && !deferred) return null;
+  if (!iosBrowser && !deferred) return null;
 
   async function handleClick() {
-    if (isIOS) {
+    if (iosBrowser) {
       setShowIOSHelp(v => !v);
       return;
     }
@@ -61,6 +99,15 @@ export default function InstallButton() {
     await deferred.prompt();
     await deferred.userChoice;
     setDeferred(null);
+  }
+
+  function handleDismiss() {
+    setDismissed(true);
+    try {
+      localStorage.setItem(DISMISSED_KEY, "1");
+    } catch {
+      // Persisting is best-effort; hiding for this session is enough.
+    }
   }
 
   const s = makeStyles(colors);
@@ -71,13 +118,33 @@ export default function InstallButton() {
         <DownloadIcon color={colors.carbsText} />
         <span>Add to Home Screen</span>
       </button>
-      {isIOS && showIOSHelp && (
-        <div style={s.help}>
-          To install, tap the Share button
-          <span style={s.inlineIcon}>
-            <ShareIcon color={colors.textSecondary} />
-          </span>
-          in the toolbar, then choose <strong>Add to Home Screen</strong>.
+      {iosBrowser && showIOSHelp && (
+        <div ref={helpRef} style={s.help}>
+          {iosBrowser === "chrome" ? (
+            <>
+              In Chrome, tap the <strong>⋯</strong> menu (bottom-right), then
+              choose <strong>Add to Home Screen</strong>. If you don&apos;t see
+              it, update Chrome or open this page in Safari.
+            </>
+          ) : iosBrowser === "safari" ? (
+            <>
+              Tap the Share button
+              <span style={s.inlineIcon}>
+                <ShareIcon color={colors.textSecondary} />
+              </span>
+              in the bottom toolbar, then choose{" "}
+              <strong>Add to Home Screen</strong>.
+            </>
+          ) : (
+            <>
+              Open this page in <strong>Safari</strong> or <strong>Chrome</strong>,
+              then use that browser&apos;s menu to choose{" "}
+              <strong>Add to Home Screen</strong>.
+            </>
+          )}
+          <button style={s.dismiss} onClick={handleDismiss}>
+            I&apos;ve added it — hide this
+          </button>
         </div>
       )}
     </div>
@@ -155,6 +222,17 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       border: `0.5px solid ${colors.border}`,
       borderRadius: 12,
       padding: 12,
+    },
+    dismiss: {
+      display: "block",
+      marginTop: 10,
+      padding: 0,
+      background: "none",
+      border: "none",
+      color: colors.carbsText,
+      fontSize: 12.5,
+      fontWeight: 600,
+      cursor: "pointer",
     },
     inlineIcon: { margin: "0 4px" },
   };
