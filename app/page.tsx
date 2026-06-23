@@ -13,6 +13,7 @@ import {
   type MessageType,
 } from "../lib/client/apiClient";
 import { useTheme, type Colors } from "../lib/client/ThemeContext";
+import { localDateStr } from "../lib/client/utils";
 
 const EXAMPLES = [
   "in the morning a large coffee with a splash of oat milk and a bagel with two tablespoons of cream cheese, for lunch a turkey sandwich with a small handful of chips, and a handful of almonds as an afternoon snack",
@@ -33,6 +34,7 @@ export default function LogScreen() {
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [history, setHistory] = useState<Message[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [limit, setLimit] = useState(20);
   const [example, setExample] = useState(EXAMPLES[0]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { colors } = useTheme();
@@ -43,7 +45,10 @@ export default function LogScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExample(EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]);
     fetchUsage()
-      .then(u => setRemaining(u.remaining))
+      .then(u => {
+        setRemaining(u.remaining);
+        setLimit(u.limit);
+      })
       .catch(() => {});
   }, []);
 
@@ -66,9 +71,12 @@ export default function LogScreen() {
     const newHistory: Message[] = [...history, { role: "user", content: text }];
 
     try {
-      const data = await analyzeFood(newHistory);
+      // Send the client's local date — the server (e.g. Vercel) runs in UTC and
+      // can't know the user's "today".
+      const data = await analyzeFood(newHistory, localDateStr());
 
       if (typeof data.remaining === "number") setRemaining(data.remaining);
+      if (typeof data.limit === "number") setLimit(data.limit);
 
       setHistory([
         ...newHistory,
@@ -93,7 +101,7 @@ export default function LogScreen() {
           ...prev,
           {
             type: "error",
-            text: "You've used all 10 of your free analyses for today. Create an account and upgrade to get unlimited logging.",
+            text: `You've used all ${limit} of your free analyses for today. Create an account and upgrade to get unlimited logging.`,
           },
         ]);
       } else {
@@ -176,7 +184,7 @@ export default function LogScreen() {
               flexShrink: 0,
             }}
           >
-            {remaining} / 10 analyses remaining today
+            {remaining} / {limit} analyses remaining today
           </div>
         )}
 

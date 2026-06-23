@@ -1,21 +1,61 @@
-# food-logger-api
+# Food Logger
 
-A conversational food-logging app built on Next.js. Users describe what they ate in free text; an LLM parses it into meals, estimates calories and macros (as ranges, since portions are vague), and the result is persisted per user per day in Postgres.
+**AI-powered food and calorie logging via natural language.** Describe what you
+ate in plain English — _"two eggs on toast and a latte"_ — and an LLM parses it
+into structured meals, estimates calories and macros (as ranges, since portions
+are vague), organizes them into a day, and tracks your totals against a daily
+target.
 
-This repo contains both halves of the product:
+It's a single [Next.js](https://nextjs.org) app that serves both the web UI and
+the JSON API it talks to (same origin), backed by Postgres. It's also an
+installable, offline-capable **PWA**. The npm package is named `food-logger-api`
+for historical reasons.
 
-- a **JSON API** (route handlers under `app/api`), and
-- a **web frontend** (React client pages under `app/`) that consumes that API from the same origin.
+## Features
 
-The app uses **Gemini** (`gemini-2.0-flash`) as the primary model and **Claude** (`claude-sonnet-4-5`) as an automatic fallback when Gemini is rate-limited.
+- **Natural-language logging** — type a free-form description of everything you
+  ate; the backend's LLM returns meals with calorie ranges and macros (protein,
+  carbs, fat, fiber), an intro, and a closing note.
+- **Dashboard** — today / week / month views with summary cards, a daily
+  progress bar toward your calorie goal, a weekly bar chart, and a navigable
+  month calendar heatmap.
+- **Editable day logs** — open any day to edit meal fields inline, or propose
+  AI-assisted edits via chat with a propose → confirm flow. Editing is limited to
+  a rolling 7-day window.
+- **Guest mode** — start immediately with an anonymous guest identity (valid for
+  7 days, with a daily free-analysis cap). Sign up to keep your history.
+- **Email / password accounts** — JWT auth; a guest's existing logs are migrated
+  into the account on signup.
+- **Light / dark / auto theme** and a configurable daily calorie target, both
+  persisted locally.
+- **Installable PWA** — add to home screen, with an offline app shell and an
+  in-app install button.
 
-## Stack
+## Screens
 
-- **Next.js 16** (App Router — route handlers under `app/api`, client pages under `app/`)
+The UI is a phone-width web app. A shared shell (header, bottom tab bar, and a
+slide-in drawer for account status, the nutrition key, theme, and the calorie
+target) wraps the Log and Dashboard screens.
+
+| Route         | Screen                                                                                                                              |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `/`           | **Log** — describe your meals; results render as meal cards with calorie/macro pills, plus the daily free-analysis counter.        |
+| `/dashboard`  | **Dashboard** — today / week / month: summary cards, progress-to-goal bar, weekly bar chart, and a month calendar.                 |
+| `/log/[date]` | **Day detail** — review a day's meals, edit fields inline, or propose AI-assisted edits (propose → confirm). Past 7 days only.     |
+| `/login`      | **Log in** to an existing account.                                                                                                |
+| `/signup`     | **Sign up** (migrates guest logs).                                                                                                |
+| `/offline`    | Offline fallback served by the service worker.                                                                                    |
+
+## Tech stack
+
+- **Next.js 16** (App Router) — client pages under `app/`, route handlers under `app/api`
 - **React 19**
 - **Postgres** via `pg`
-- **Google Generative AI** + **Anthropic** SDKs
+- **Google Generative AI** + **Anthropic** SDKs — **Gemini** (`gemini-2.0-flash`)
+  is the primary model, **Claude** (`claude-sonnet-4-5`) the automatic fallback
+  when Gemini is rate-limited
 - **JWT** auth (`jsonwebtoken`) with **bcrypt** password hashing
+- **PWA**: web manifest, a service worker, and icons generated with `next/og`
 
 ## Getting started
 
@@ -64,114 +104,27 @@ npm run start    # serve the production build
 npm run lint     # eslint
 ```
 
-Then open [http://localhost:3000](http://localhost:3000) for the web app. The
-frontend talks to the API on the same origin, so no extra configuration is
-needed.
+Then open [http://localhost:3000](http://localhost:3000). The UI talks to the API
+on the same origin, so no extra configuration is needed.
 
-## Web app
+> **PWA note:** installability and the service worker require HTTPS in
+> production (automatic on most hosts). For local testing use
+> `next dev --experimental-https`.
 
-The site itself is the food logger — a phone-width UI rendered as React client
-pages, persisting auth and preferences in `localStorage`. Unauthenticated
-visitors get an anonymous guest identity (sent via `x-user-id`); signing up
-migrates their guest logs into the new account.
+## How it works
 
-| Route         | Screen                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------- |
-| `/`           | **Log** — describe your meals in plain text; results show as meal cards with calorie/macro pills, plus the daily free-analysis counter. |
-| `/dashboard`  | **Dashboard** — today / week / month views: summary cards, progress-to-goal bar, weekly bar chart, and a navigable month calendar. |
-| `/log/[date]` | **Day detail** — review a day's meals, edit fields inline, or propose AI-assisted edits (propose → confirm). Limited to the past 7 days. |
-| `/login`      | **Log in** to an existing account.                                                             |
-| `/signup`     | **Sign up** (migrates guest logs).                                                             |
+The frontend is a set of React client pages that call the same-origin API,
+persisting auth (JWT) and preferences (theme, calorie target) in `localStorage`.
 
-A shared shell (header, bottom tab bar, and a slide-in drawer for account
-status, the nutrition key, dark mode, and the daily calorie target) wraps the
-Log and Dashboard screens. Theme and calorie target are stored locally.
+**Identity & rate limiting.** Requests are attributed to one of:
 
-The frontend lives alongside the API:
+- **Authenticated users** — `Authorization: Bearer <jwt>`, a server-verified account.
+- **Guests** — an `x-user-id: <id>` header for an unauthenticated session.
 
-- `app/page.tsx`, `app/dashboard/`, `app/login/`, `app/signup/`, `app/log/[date]/` — the screens
-- `components/web/` — header, tab bar, drawer, app shell, and SVG icons
-- `lib/client/` — browser-only API client, auth/guest identity, storage, and the theme/settings/drawer React contexts (kept separate from the server-only `lib/` modules)
+LLM calls are capped by a daily free-tier limit (20 analyses/day). Authenticated
+users are limited per account; guests per client. On signup, a guest's logs are
+migrated to the new account. Failed logins are throttled.
 
-## Identity & rate limiting
-
-Requests are attributed to one of:
-
-- **Authenticated users** — `Authorization: Bearer <jwt>`. The identity is the server-verified user account.
-- **Guests** — `x-user-id: <id>` header for an unauthenticated session.
-
-LLM calls are capped by a daily free-tier limit. Authenticated users are limited per account; guest usage is limited per client. On signup, a guest's existing logs are migrated to the new account.
-
-Login attempts are rate-limited.
-
-## API
-
-All endpoints accept/return JSON. Authentication is via the `Authorization` or `x-user-id` header described above unless noted.
-
-### Auth
-
-| Method | Path               | Body                            | Notes                                                                                            |
-| ------ | ------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| POST   | `/api/auth/signup` | `{ email, password, guestId? }` | Password ≥ 8 chars. Returns `{ token, userId, email }`. Migrates guest logs if `guestId` given.  |
-| POST   | `/api/auth/login`  | `{ email, password }`           | Returns `{ token, userId, email }`. Rate-limited.                                                |
-
-### Logging & analysis
-
-| Method | Path                    | Body                     | Notes                                                                                                                                   |
-| ------ | ----------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/analyze`          | `{ messages, date? }`    | Runs the LLM, upserts the day's log + meals. Counts against the daily limit. `date` must be within the past 7 days (defaults to today). |
-| GET    | `/api/logs?days=7`      | —                        | Recent logs with meals. `days` clamped to 1–90 (default 7).                                                                             |
-| GET    | `/api/logs/[date]`      | —                        | Single day's log with meals. `404` if none.                                                                                             |
-| PATCH  | `/api/logs/[date]`      | `{ meal_id, ...fields }` | Edit one meal; omitted fields are preserved. Recomputes day totals.                                                                     |
-| DELETE | `/api/logs/[date]`      | `{ meal_id }`            | Delete one meal. Recomputes day totals.                                                                                                 |
-| POST   | `/api/logs/[date]/edit` | `{ messages }`           | LLM proposes an edited day from current state + instructions. Counts against the daily limit. Returns `{ proposed, remaining, limit }`. |
-| PUT    | `/api/logs/[date]/edit` | `{ log }`                | Persist a full edited day (replaces all meals).                                                                                         |
-| GET    | `/api/usage`            | —                        | Current daily usage `{ count, remaining, limit }`.                                                                                       |
-
-`[date]` is `YYYY-MM-DD`. Edits and analyses are restricted to the past 7 days (`DATE_OUT_OF_RANGE` otherwise). Rate-limit rejections return `429` with code `RATE_LIMIT_EXCEEDED`.
-
-## Data model
-
-See [`lib/schema.sql`](lib/schema.sql). Tables: `users`, `logs` (one per user per day), `meals` (per log, ordered Breakfast → Lunch → Dinner → Snacks), `daily_usage` (rate-limit counter), `login_attempts` (failed-login throttle).
-
-## Project layout
-
-```
-app/
-  page.tsx                  Log screen (home)
-  dashboard/page.tsx        Dashboard (today / week / month)
-  login/page.tsx            Log in
-  signup/page.tsx           Sign up (+ guest migration)
-  log/[date]/page.tsx       Day detail / inline + AI-assisted editing
-  layout.tsx                Root layout, fonts, providers
-  globals.css               Global styles + phone-width app shell
-  api/
-    analyze/route.ts          POST  – analyze free text into a logged day
-    auth/login/route.ts       POST  – login
-    auth/signup/route.ts      POST  – signup (+ guest migration)
-    logs/route.ts             GET   – recent logs
-    logs/[date]/route.ts      GET/PATCH/DELETE – read/edit/delete a day
-    logs/[date]/edit/route.ts POST/PUT – LLM-assisted edit + persist
-    usage/route.ts            GET   – current usage
-components/web/
-  AppProviders.tsx  theme/settings/drawer context providers + shell
-  AppChrome.tsx     header + scroll area + tab bar + drawer
-  Header.tsx        TabBar.tsx  Drawer.tsx  Spinner.tsx
-  icons/            FoodLoggerLogo, DashboardIcon, ProfileIcon
-lib/client/         browser-only frontend modules
-  apiClient.ts      same-origin API client + shared types
-  authClient.ts     JWT token storage / expiry handling
-  identity.ts       anonymous guest id (+ 7-day window)
-  storage.ts        localStorage wrapper (SSR-safe)
-  utils.ts          7-day window check
-  ThemeContext.tsx  SettingsContext.tsx  DrawerContext.tsx
-lib/                server-only modules
-  llm.ts            Gemini-primary / Claude-fallback food analysis
-  auth.ts           JWT + bcrypt helpers
-  getUser.ts        identity resolution & rate-limit keying
-  rateLimit.ts      daily usage counter
-  loginRateLimit.ts failed-login throttle
-  db.ts             Postgres pool
-  dateUtils.ts      7-day window check
-  schema.sql        database schema
-```
+**Dates.** The day is the user's **local** date: the client sends its local date
+with each analysis, and the server's 7-day window check allows a one-day
+timezone tolerance (the server, e.g. on Vercel, runs in UTC).
