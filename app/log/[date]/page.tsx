@@ -100,7 +100,7 @@ export default function DayDetailScreen() {
       const message = err instanceof Error ? err.message : "Unknown error";
       if (message === "RATE_LIMIT_EXCEEDED") {
         setNotice(
-          "Daily limit reached — you've used all 10 of your free analyses for today. Create an account to get unlimited logging.",
+          "Daily limit reached — you've used all 20 of your free analyses for today. Create an account to get unlimited logging.",
         );
       } else if (message === "DATE_OUT_OF_RANGE") {
         setNotice("Can't edit this day — you can only log food for the past 7 days.");

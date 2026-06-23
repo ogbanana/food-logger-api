@@ -1,6 +1,6 @@
 import pool from "./db";
 
-const FREE_TIER_LIMIT = 10;
+const FREE_TIER_LIMIT = 20;
 
 type UsageRow = {
   analysis_count: number;

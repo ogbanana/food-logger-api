@@ -16,8 +16,14 @@ export function isWithinSevenDays(dateStr: string): boolean {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(today.getDate() - 7);
+  // The date sent by the client is in the user's local time, but the server's
+  // "today" may be a different timezone (UTC on most hosts). Allow a one-day
+  // tolerance on each side so a client up to ~14h ahead of or behind the server
+  // isn't wrongly rejected.
+  const lowerBound = new Date(today);
+  lowerBound.setDate(today.getDate() - 8);
+  const upperBound = new Date(today);
+  upperBound.setDate(today.getDate() + 1);
 
-  return date >= sevenDaysAgo && date <= today;
+  return date >= lowerBound && date <= upperBound;
 }
