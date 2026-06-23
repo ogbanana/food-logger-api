@@ -6,7 +6,11 @@ import AppChrome from "../../components/web/AppChrome";
 import Spinner from "../../components/web/Spinner";
 import { SaladIcon } from "../../components/web/icons/EmojiIcons";
 import { fetchWeekLogs, type DailyLog } from "../../lib/client/apiClient";
-import { isWithinSevenDays } from "../../lib/client/utils";
+import {
+  isWithinSevenDays,
+  localDateStr,
+  parseLocalDate,
+} from "../../lib/client/utils";
 import { useTheme, type Colors } from "../../lib/client/ThemeContext";
 import { useSettings } from "../../lib/client/SettingsContext";
 
@@ -69,7 +73,7 @@ export default function DashboardScreen() {
     const y = targetDate.getFullYear();
     const m = targetDate.getMonth();
     return all.filter(l => {
-      const d = new Date(l.date);
+      const d = parseLocalDate(l.date);
       return d.getFullYear() === y && d.getMonth() === m;
     });
   }
@@ -95,7 +99,7 @@ export default function DashboardScreen() {
     loadData();
   }, []);
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = localDateStr();
   const todayLog = weekLogs.find(l => l.date.startsWith(todayStr));
 
   const visibleLogs =
@@ -108,8 +112,8 @@ export default function DashboardScreen() {
         : monthLogs;
 
   function formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return `${days[date.getUTCDay()]} ${date.getUTCMonth() + 1}/${date.getUTCDate()}`;
+    const date = parseLocalDate(dateStr);
+    return `${days[date.getDay()]} ${date.getMonth() + 1}/${date.getDate()}`;
   }
 
   const avgCals = visibleLogs.length
@@ -261,14 +265,14 @@ export default function DashboardScreen() {
                   {Array.from({ length: 7 }).map((_, i) => {
                     const date = new Date();
                     date.setDate(date.getDate() - (6 - i));
-                    const dateStr = date.toISOString().split("T")[0];
+                    const dateStr = localDateStr(date);
                     const entry = weekLogs.find(l => l.date.startsWith(dateStr));
                     const heightPct = entry
                       ? entry.cal_high /
                         Math.max(...weekLogs.map(l => l.cal_high), target)
                       : 0;
                     const overTarget = entry ? entry.cal_high > target : false;
-                    const dayLabel = `${days[date.getUTCDay()]} ${date.getUTCMonth() + 1}/${date.getUTCDate()}`;
+                    const dayLabel = `${days[date.getDay()]} ${date.getMonth() + 1}/${date.getDate()}`;
 
                     return (
                       <div key={i} style={s.barCol}>
@@ -449,7 +453,7 @@ function CalendarGrid({
   onDayPress: (date: string) => void;
 }) {
   const s = makeStyles(colors);
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = localDateStr();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay();
 

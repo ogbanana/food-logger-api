@@ -3,7 +3,7 @@ import { analyzeFood, Message } from "@/lib/llm";
 import pool from "@/lib/db";
 import { getUserId, getRateLimitKey } from "@/lib/getUser";
 import { checkAndIncrementUsage } from "@/lib/rateLimit";
-import { isWithinSevenDays } from "@/lib/dateUtils";
+import { isWithinSevenDays, todayLocalDate } from "@/lib/dateUtils";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
       messages,
       date: requestedDate,
     }: { messages: Message[]; date?: string } = await req.json();
-    const today = new Date().toISOString().split("T")[0];
+    // Use local time so the default day matches the local-time 7-day window
+    // check below (a UTC date can be "tomorrow" in negative-offset timezones).
+    const today = todayLocalDate();
     const targetDate = requestedDate || today;
 
     // Validate date is within 7 days

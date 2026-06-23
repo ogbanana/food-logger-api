@@ -18,7 +18,7 @@ import {
   type Message,
   type CalorieLog,
 } from "../../../lib/client/apiClient";
-import { isWithinSevenDays } from "../../../lib/client/utils";
+import { isWithinSevenDays, parseLocalDate } from "../../../lib/client/utils";
 import { useTheme, type Colors } from "../../../lib/client/ThemeContext";
 
 type Meal = MealWithId;
@@ -127,8 +127,8 @@ export default function DayDetailScreen() {
   }
 
   function formatDate(dateStr: string): string {
-    const d = new Date(dateStr);
-    return `${days[d.getUTCDay()]} ${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+    const d = parseLocalDate(dateStr);
+    return `${days[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`;
   }
 
   const s = makeStyles(colors);
