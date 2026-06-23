@@ -29,7 +29,7 @@ export default function DayDetailScreen() {
   const params = useParams<{ date: string }>();
   const date = params.date;
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [log, setLog] = useState<DailyLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -131,7 +131,7 @@ export default function DayDetailScreen() {
     return `${days[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`;
   }
 
-  const s = makeStyles(colors);
+  const s = makeStyles(colors, isDark);
 
   if (loading) {
     return (
@@ -462,7 +462,16 @@ function TotalCell({
   );
 }
 
-function makeStyles(colors: Colors): Record<string, CSSProperties> {
+function makeStyles(
+  colors: Colors,
+  isDark = false,
+): Record<string, CSSProperties> {
+  // The proposed-edit card is tinted to stand out. In dark mode the carbs-blue
+  // tint collides with the carbs pills inside it, so use a neutral elevated
+  // surface with a neutral border there instead.
+  const proposedBg = isDark ? colors.surfaceAlt : colors.carbsBg;
+  const proposedBorder = isDark ? colors.borderStrong : `${colors.carbsText}44`;
+  const proposedDivider = isDark ? colors.border : `${colors.carbsText}33`;
   return {
     root: {
       height: "100%",
@@ -571,8 +580,8 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
     mealItems: { fontSize: 13, color: colors.textSecondary, lineHeight: 1.5 },
 
     proposedCard: {
-      backgroundColor: colors.carbsBg,
-      border: `0.5px solid ${colors.carbsText}44`,
+      backgroundColor: proposedBg,
+      border: `0.5px solid ${proposedBorder}`,
       borderRadius: 20,
       padding: 14,
       display: "flex",
@@ -585,7 +594,7 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       flexDirection: "column",
       gap: 6,
       paddingBottom: 10,
-      borderBottom: `0.5px solid ${colors.carbsText}33`,
+      borderBottom: `0.5px solid ${proposedDivider}`,
     },
     proposedMealName: { fontSize: 14, fontWeight: 600, color: colors.textPrimary },
     proposedMealItems: { fontSize: 13, color: colors.textSecondary },

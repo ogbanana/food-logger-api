@@ -54,11 +54,12 @@ export async function login(
 export async function analyzeFood(
   messages: Message[],
   date?: string,
+  today?: string,
 ): Promise<AnalyzeResponse> {
   const res = await fetch(`${API_BASE}/api/analyze`, {
     method: "POST",
     headers: getHeaders(),
-    body: JSON.stringify({ messages, date }),
+    body: JSON.stringify({ messages, date, today }),
   });
 
   const raw = await res.json();
@@ -153,6 +154,28 @@ export async function proposeEdit(
   return raw.proposed as CalorieLog;
 }
 
+/** Append already-parsed meals to a day's log (the confirm step for logging to a
+ * day other than today). Runs no LLM and doesn't count against the daily limit. */
+export async function addMealsToDay(
+  date: string,
+  log: CalorieLog,
+  today?: string,
+): Promise<DailyLog> {
+  const res = await fetch(`${API_BASE}/api/logs/${date}/add`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({
+      meals: log.meals,
+      intro: log.intro,
+      closing: log.closing,
+      today,
+    }),
+  });
+  const raw = await res.json();
+  if (raw.error) throw new Error(raw.error);
+  return raw as DailyLog;
+}
+
 export async function commitEdit(date: string, log: CalorieLog): Promise<void> {
   const res = await fetch(`${API_BASE}/api/logs/${date}/edit`, {
     method: "PUT",
@@ -215,6 +238,7 @@ export type CalorieLog = {
     fiber_g: number;
   };
   closing?: string;
+  log_date?: string;
 };
 
 export type Message = {
@@ -223,12 +247,22 @@ export type Message = {
 };
 
 export type MessageType = {
-  type: "user" | "result" | "error";
+  type: "user" | "result" | "error" | "confirm";
   text?: string;
   data?: CalorieLog;
+  // For "confirm" messages (logging to a day other than today):
+  inferredDate?: string;
+  outOfRange?: boolean;
+  pending?: boolean;
+  doneLabel?: string;
 };
 
 export type AnalyzeResponse = CalorieLog & {
   remaining?: number;
   limit?: number;
+  /** Set when the model thinks the text is for a day other than today. */
+  inferred_date?: string;
+  needs_confirmation?: boolean;
+  /** The inferred day is outside the editable 7-day window. */
+  out_of_range?: boolean;
 };

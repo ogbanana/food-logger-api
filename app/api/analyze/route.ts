@@ -33,14 +33,19 @@ export async function POST(req: NextRequest) {
     const {
       messages,
       date: requestedDate,
-    }: { messages: Message[]; date?: string } = await req.json();
-    // Use local time so the default day matches the local-time 7-day window
-    // check below (a UTC date can be "tomorrow" in negative-offset timezones).
-    const today = todayLocalDate();
-    const targetDate = requestedDate || today;
+      today: clientToday,
+    }: { messages: Message[]; date?: string; today?: string } =
+      await req.json();
+    // The client (in the user's timezone) reports its local "today"; the server
+    // may run in a different zone (e.g. UTC on Vercel), so prefer the client's.
+    const today =
+      clientToday && /^\d{4}-\d{2}-\d{2}$/.test(clientToday)
+        ? clientToday
+        : todayLocalDate();
 
-    // Validate date is within 7 days
-    if (!isWithinSevenDays(targetDate)) {
+    // An explicit target date (from the day-detail screen) is validated up front
+    // to avoid a wasted LLM call.
+    if (requestedDate && !isWithinSevenDays(requestedDate, today)) {
       return Response.json(
         {
           error: "You can only log food for the past 7 days",
@@ -50,8 +55,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use requested date or fall back to today
-    const data = await analyzeFood(messages);
+    const data = await analyzeFood(messages, today);
+
+    let targetDate = requestedDate || today;
+
+    // With no explicit date, use the day the model inferred from the text. If it
+    // isn't today, don't persist yet — return the parse for the client to
+    // confirm, then append to that day (so its existing log isn't overwritten by
+    // this single message).
+    if (!requestedDate) {
+      const inferred = data.log_date;
+      const inferredDate =
+        typeof inferred === "string" && /^\d{4}-\d{2}-\d{2}$/.test(inferred)
+          ? inferred
+          : today;
+      if (inferredDate !== today) {
+        return Response.json({
+          ...data,
+          inferred_date: inferredDate,
+          needs_confirmation: true,
+          out_of_range: !isWithinSevenDays(inferredDate, today),
+          remaining,
+          limit,
+        });
+      }
+      targetDate = today;
+    }
 
     const existing = await pool.query<LogRow>(
       "SELECT id FROM logs WHERE date = $1 AND user_id = $2",

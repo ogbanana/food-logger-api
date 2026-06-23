@@ -3,9 +3,11 @@
 import { useRef, useState, useEffect, type CSSProperties } from "react";
 import AppChrome from "../components/web/AppChrome";
 import Spinner from "../components/web/Spinner";
+import DateTimeHeader from "../components/web/DateTimeHeader";
 import { SteakIcon } from "../components/web/icons/EmojiIcons";
 import {
   analyzeFood,
+  addMealsToDay,
   fetchUsage,
   type CalorieLog,
   type Meal,
@@ -13,7 +15,19 @@ import {
   type MessageType,
 } from "../lib/client/apiClient";
 import { useTheme, type Colors } from "../lib/client/ThemeContext";
-import { localDateStr } from "../lib/client/utils";
+import { localDateStr, parseLocalDate } from "../lib/client/utils";
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** A friendly label for a logged-for date, e.g. "Yesterday (Mon 6/22)". */
+function dayLabel(dateStr: string, todayStr: string): string {
+  const d = parseLocalDate(dateStr);
+  const t = parseLocalDate(todayStr);
+  const diff = Math.round((t.getTime() - d.getTime()) / 86400000);
+  const wd = `${DAY_NAMES[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`;
+  if (diff === 1) return `Yesterday (${wd})`;
+  return wd;
+}
 
 const EXAMPLES = [
   "in the morning a large coffee with a splash of oat milk and a bagel with two tablespoons of cream cheese, for lunch a turkey sandwich with a small handful of chips, and a handful of almonds as an afternoon snack",
@@ -71,12 +85,28 @@ export default function LogScreen() {
     const newHistory: Message[] = [...history, { role: "user", content: text }];
 
     try {
-      // Send the client's local date — the server (e.g. Vercel) runs in UTC and
-      // can't know the user's "today".
-      const data = await analyzeFood(newHistory, localDateStr());
+      // Send the client's local date as `today` (no explicit `date`) so the
+      // server can infer which day the text is for. The server runs in UTC and
+      // can't know the user's "today" on its own.
+      const data = await analyzeFood(newHistory, undefined, localDateStr());
 
       if (typeof data.remaining === "number") setRemaining(data.remaining);
       if (typeof data.limit === "number") setLimit(data.limit);
+
+      // The text looks like it's for a different day — ask before logging, then
+      // append to that day rather than overwriting it.
+      if (data.needs_confirmation) {
+        setMessages(prev => [
+          ...prev,
+          {
+            type: "confirm",
+            data,
+            inferredDate: data.inferred_date,
+            outOfRange: data.out_of_range,
+          },
+        ]);
+        return;
+      }
 
       setHistory([
         ...newHistory,
@@ -113,6 +143,35 @@ export default function LogScreen() {
     }
   }
 
+  // Confirm logging a flagged message to a chosen day (appends, no LLM/charge).
+  async function confirmLog(
+    index: number,
+    targetDate: string,
+    label: string,
+    data: CalorieLog,
+  ) {
+    setMessages(prev =>
+      prev.map((m, i) => (i === index ? { ...m, pending: true } : m)),
+    );
+    scrollToEnd();
+    try {
+      await addMealsToDay(targetDate, data, localDateStr());
+      setMessages(prev =>
+        prev.map((m, i) =>
+          i === index ? { ...m, pending: false, doneLabel: label } : m,
+        ),
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setMessages(prev => [
+        ...prev.map((m, i) => (i === index ? { ...m, pending: false } : m)),
+        { type: "error", text: message },
+      ]);
+    } finally {
+      scrollToEnd();
+    }
+  }
+
   const s = makeStyles(colors);
 
   return (
@@ -120,6 +179,8 @@ export default function LogScreen() {
       <div style={s.root}>
         <div ref={scrollRef} style={s.messages}>
           <div style={s.messagesContent}>
+            <DateTimeHeader />
+
             <div style={s.assistantBubble}>
               <span style={s.assistantText}>
                 Hey! Welcome to Food Logger — just dump everything you ate today
@@ -156,6 +217,18 @@ export default function LogScreen() {
               }
               if (msg.type === "result" && msg.data) {
                 return <ResultCard key={i} data={msg.data} colors={colors} />;
+              }
+              if (msg.type === "confirm" && msg.data) {
+                return (
+                  <ConfirmCard
+                    key={i}
+                    msg={msg}
+                    colors={colors}
+                    onChoose={(targetDate, label) =>
+                      confirmLog(i, targetDate, label, msg.data!)
+                    }
+                  />
+                );
               }
               return null;
             })}
@@ -248,6 +321,79 @@ function ResultCard({ data, colors }: { data: CalorieLog; colors: Colors }) {
           <span style={s.assistantText}>{data.closing}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function ConfirmCard({
+  msg,
+  colors,
+  onChoose,
+}: {
+  msg: MessageType;
+  colors: Colors;
+  onChoose: (targetDate: string, label: string) => void;
+}) {
+  const s = makeStyles(colors);
+  const data = msg.data!;
+  const today = localDateStr();
+  const label = msg.inferredDate ? dayLabel(msg.inferredDate, today) : "another day";
+  const done = !!msg.doneLabel;
+
+  return (
+    <div style={s.confirmCard}>
+      {done ? (
+        <div style={s.confirmHeaderDone}>✓ Added to {msg.doneLabel}</div>
+      ) : (
+        <div style={s.confirmHeader}>
+          This looks like it&apos;s for <strong>{label}</strong> — not today.
+          Where should it go?
+        </div>
+      )}
+
+      {data.meals.map((meal, i) => (
+        <MealCard key={i} meal={meal} colors={colors} />
+      ))}
+
+      <div style={s.confirmTotals}>
+        {data.totals.cal_low}–{data.totals.cal_high} kcal · P
+        {data.totals.protein_g}g · Cb{data.totals.carbs_g}g · F
+        {data.totals.fat_g}g · Fi{data.totals.fiber_g}g
+      </div>
+
+      {!done &&
+        (msg.pending ? (
+          <div style={s.confirmPending}>
+            <Spinner size={16} color={colors.textMuted} />
+          </div>
+        ) : msg.outOfRange ? (
+          <>
+            <div style={s.confirmNote}>
+              That day is more than 7 days ago, so it can&apos;t be saved there.
+            </div>
+            <button
+              style={s.confirmBtnPrimary}
+              onClick={() => onChoose(today, "Today")}
+            >
+              Log as today instead
+            </button>
+          </>
+        ) : (
+          <div style={s.confirmActions}>
+            <button
+              style={s.confirmBtnSecondary}
+              onClick={() => onChoose(today, "Today")}
+            >
+              It&apos;s for today
+            </button>
+            <button
+              style={s.confirmBtnPrimary}
+              onClick={() => onChoose(msg.inferredDate!, label)}
+            >
+              Add to {label}
+            </button>
+          </div>
+        ))}
     </div>
   );
 }
@@ -473,5 +619,65 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       boxShadow: "0 6px 16px rgba(16,24,40,0.18)",
     },
     sendBtnDisabled: { opacity: 0.35, cursor: "default", boxShadow: "none" },
+
+    confirmCard: {
+      backgroundColor: colors.surface,
+      border: `0.5px solid ${colors.warning}55`,
+      borderRadius: 14,
+      padding: 14,
+      marginTop: 8,
+      display: "flex",
+      flexDirection: "column",
+      boxShadow:
+        "0 1px 2px rgba(16,24,40,0.04), 0 8px 20px rgba(16,24,40,0.06)",
+    },
+    confirmHeader: {
+      fontSize: 13,
+      lineHeight: 1.5,
+      color: colors.textPrimary,
+      marginBottom: 4,
+    },
+    confirmHeaderDone: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: colors.proteinText,
+      marginBottom: 4,
+    },
+    confirmTotals: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: 500,
+      marginTop: 4,
+      marginBottom: 10,
+    },
+    confirmNote: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginBottom: 8,
+    },
+    confirmPending: { display: "flex", justifyContent: "center", padding: 6 },
+    confirmActions: { display: "flex", flexDirection: "row", gap: 8 },
+    confirmBtnPrimary: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      color: colors.primaryText,
+      border: "none",
+      borderRadius: 12,
+      padding: 11,
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: 600,
+    },
+    confirmBtnSecondary: {
+      flex: 1,
+      backgroundColor: colors.surfaceAlt,
+      color: colors.textPrimary,
+      border: `0.5px solid ${colors.border}`,
+      borderRadius: 12,
+      padding: 11,
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: 500,
+    },
   };
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppChrome from "../../components/web/AppChrome";
 import Spinner from "../../components/web/Spinner";
 import { SaladIcon } from "../../components/web/icons/EmojiIcons";
+import DateTimeHeader from "../../components/web/DateTimeHeader";
 import { fetchWeekLogs, type DailyLog } from "../../lib/client/apiClient";
 import {
   isWithinSevenDays,
@@ -172,11 +173,13 @@ export default function DashboardScreen() {
           ))}
         </div>
 
-        {/* Daily Calorie Target (read-only — edit in drawer) */}
-        <div style={s.targetRow}>
-          <span style={s.targetLabel}>Daily Calorie Target</span>
-          <span style={s.targetValue}>{target} kcal</span>
+        {/* Daily calorie goal (read-only — edit in drawer) */}
+        <div style={s.goalChip}>
+          <span style={s.goalChipLabel}>Daily goal</span>
+          <span style={s.goalChipValue}>{target.toLocaleString()} kcal</span>
         </div>
+
+        {range === "today" && <DateTimeHeader />}
 
         {visibleLogs.length === 0 && range !== "month" ? (
           <div style={s.empty}>
@@ -580,14 +583,19 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
     toggleText: { fontSize: 13, color: colors.textSecondary, fontWeight: 500 },
     toggleTextActive: { color: colors.textPrimary },
 
-    targetRow: {
+    goalChip: {
+      alignSelf: "flex-end",
       display: "flex",
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      gap: 6,
+      backgroundColor: colors.surfaceAlt,
+      border: `0.5px solid ${colors.border}`,
+      borderRadius: 99,
+      padding: "6px 12px",
     },
-    targetLabel: { fontSize: 13, color: colors.textSecondary },
-    targetValue: { fontSize: 13, color: colors.calText, fontWeight: 600 },
+    goalChipLabel: { fontSize: 12, color: colors.textSecondary },
+    goalChipValue: { fontSize: 12, fontWeight: 600, color: colors.calText },
 
     empty: {
       display: "flex",
