@@ -674,7 +674,9 @@ function CalendarGrid({
         <span
           style={{
             ...s.calCals,
-            ...(entry ? { color: colors.calText, fontWeight: 500 } : {}),
+            ...(entry
+              ? { color: colors.calText, fontWeight: 800, fontSize: 12 }
+              : {}),
           }}
         >
           {entry ? avgCal : "—"}

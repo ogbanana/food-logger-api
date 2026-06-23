@@ -4,7 +4,7 @@
 
 type IconProps = { size?: number };
 
-/** 🥩 — a steak with marbling and a bone nub. */
+/** a steak with marbling and a bone nub. */
 export function SteakIcon({ size = 16 }: IconProps) {
   return (
     <svg
@@ -41,7 +41,7 @@ export function SteakIcon({ size = 16 }: IconProps) {
   );
 }
 
-/** 🥗 — a bowl of leafy greens with a tomato. */
+/** a bowl of leafy greens with a tomato. */
 export function SaladIcon({ size = 16 }: IconProps) {
   return (
     <svg
@@ -68,7 +68,7 @@ export function SaladIcon({ size = 16 }: IconProps) {
   );
 }
 
-/** 📅 — a tear-off calendar with a red header and binding rings. */
+/** a tear-off calendar with a red header and binding rings. */
 export function CalendarIcon({ size = 16 }: IconProps) {
   return (
     <svg

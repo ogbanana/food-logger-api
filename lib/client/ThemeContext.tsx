@@ -52,7 +52,7 @@ export const light: Colors = {
   primary: "#10131A",
   primaryText: "#FFFFFF",
   calBg: "#FFEAD4",
-  calText: "#C2410C",
+  calText: "#d89519",
   proteinBg: "#ECE3FD",
   proteinText: "#7C3AED",
   carbsBg: "#DEEBFD",
