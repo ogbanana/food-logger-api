@@ -69,7 +69,7 @@ export default function InstallButton() {
     <div style={s.wrap}>
       <button style={s.btn} onClick={handleClick}>
         <DownloadIcon color={colors.carbsText} />
-        <span>Install app</span>
+        <span>Add to Home Screen</span>
       </button>
       {isIOS && showIOSHelp && (
         <div style={s.help}>

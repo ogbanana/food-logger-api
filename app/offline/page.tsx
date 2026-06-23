@@ -19,7 +19,13 @@ export default function OfflineScreen() {
         backgroundColor: colors.bg,
       }}
     >
-      <FoodLoggerLogo size={48} color={colors.textPrimary} accent={colors.calText} />
+      <FoodLoggerLogo
+        size={48}
+        color={colors.textPrimary}
+        bottle="#2563EB"
+        apple="#E03131"
+        stem="#2F9E44"
+      />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: colors.textPrimary }}>
         You&apos;re offline
       </h1>

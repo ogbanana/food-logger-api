@@ -40,9 +40,11 @@ export default function TabBar() {
         onClick={() => router.push("/")}
         icon={
           <FoodLoggerLogo
-            color={logActive ? colors.tabActive : colors.tabInactive}
-            accent={logActive ? colors.tabActive : colors.tabInactive}
             size={24}
+            color={logActive ? colors.tabActive : colors.tabInactive}
+            bottle={logActive ? "#2563EB" : colors.tabInactive}
+            apple={logActive ? "#E03131" : colors.tabInactive}
+            stem={logActive ? "#2F9E44" : colors.tabInactive}
           />
         }
       />
