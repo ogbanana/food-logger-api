@@ -62,7 +62,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await analyzeFood(messages, today);
+    // For an add-to-today message (no explicit target day), seed the model with
+    // the day's authoritative current state so it returns the FULL updated day
+    // per the system prompt's accumulation rule. Without this the model can
+    // silently drop a previously logged item, and the destructive rewrite below
+    // would then erase it. Mirrors how /logs/[date]/edit injects state.
+    let analysisMessages = messages;
+    if (!requestedDate) {
+      const todayLog = await pool.query<LogRow>(
+        "SELECT id FROM logs WHERE date = $1 AND user_id = $2",
+        [today, userId],
+      );
+      if (todayLog.rows.length > 0) {
+        const todayMeals = await pool.query<MealRow>(
+          `SELECT meal, items, cal_low, cal_high, protein_g, carbs_g, fat_g, fiber_g
+             FROM meals WHERE log_id = $1`,
+          [todayLog.rows[0].id],
+        );
+        if (todayMeals.rows.length > 0) {
+          const currentState = todayMeals.rows
+            .map(
+              m =>
+                `${m.meal}: ${m.items.join(", ")} (${m.cal_low}–${m.cal_high} kcal, P${m.protein_g}g C${m.carbs_g}g F${m.fat_g}g Fi${m.fiber_g}g)`,
+            )
+            .join("\n");
+          analysisMessages = [
+            {
+              role: "user",
+              content: `For reference, here is everything already logged for today (${today}):\n${currentState}\n\nIf my next message logs more food for today, keep all of these existing items and add the new ones, returning the full updated day.`,
+            },
+            {
+              role: "assistant",
+              content:
+                "Understood — I have today's current log and will keep these items when adding more.",
+            },
+            ...messages,
+          ];
+        }
+      }
+    }
+
+    const data = await analyzeFood(analysisMessages, today);
 
     // Only an actual food log counts against the daily limit and gets persisted.
     // Greetings/questions/small talk (and any empty parse) get a conversational
@@ -197,4 +237,15 @@ export async function POST(req: NextRequest) {
 
 type LogRow = {
   id: string;
+};
+
+type MealRow = {
+  meal: string;
+  items: string[];
+  cal_low: number;
+  cal_high: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
 };
