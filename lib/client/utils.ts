@@ -16,8 +16,10 @@ export function parseLocalDate(dateStr: string): Date {
 }
 
 export function isWithinSevenDays(dateStr: string): boolean {
-  // Parse date parts directly to avoid timezone shifts
-  const [year, month, day] = dateStr.split("-").map(Number);
+  // Parse date parts directly to avoid timezone shifts. Strip any time portion
+  // first — log dates can arrive as full ISO timestamps (…T00:00:00.000Z), and
+  // splitting those on "-" would otherwise make the day NaN.
+  const [year, month, day] = dateStr.split("T")[0].split("-").map(Number);
   const date = new Date(year, month - 1, day); // local time, no UTC shift
 
   const now = new Date();
