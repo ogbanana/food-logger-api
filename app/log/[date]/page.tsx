@@ -145,7 +145,7 @@ export default function DayDetailScreen() {
     <div style={s.root}>
       <div ref={scrollRef} style={s.scroll}>
         <div style={s.content}>
-          <button style={s.backBtn} onClick={() => router.replace("/dashboard")}>
+          <button style={s.backBtn} onClick={() => router.back()}>
             ← Back
           </button>
 

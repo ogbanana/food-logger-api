@@ -43,6 +43,18 @@ export default function DashboardScreen() {
     router.push(`/log/${dateStr.split("T")[0]}`);
   }
 
+  // Switch range and mirror it in the URL via the Next router (so the router's
+  // own history stack records it) — that way returning here with the back
+  // button restores the tab the user left from, instead of dropping them on
+  // Today. A plain history.replaceState isn't seen by the router and gets lost
+  // on back navigation.
+  function selectRange(r: TimeRange) {
+    setRange(r);
+    router.replace(r === "today" ? "/dashboard" : `/dashboard?view=${r}`, {
+      scroll: false,
+    });
+  }
+
   async function loadData() {
     setLoading(true);
     try {
@@ -99,12 +111,13 @@ export default function DashboardScreen() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
-    // Open directly to Month when linked from the Log screen's guide.
-    if (
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("view") === "month"
-    ) {
-      setRange("month");
+    // Restore the range from the URL: linked from the Log screen's guide
+    // (?view=month) or returned to via the back button (?view=week|month).
+    if (typeof window !== "undefined") {
+      const view = new URLSearchParams(window.location.search).get("view");
+      if (view === "week" || view === "month") {
+        setRange(view);
+      }
     }
   }, []);
 
@@ -119,6 +132,10 @@ export default function DashboardScreen() {
       : range === "week"
         ? weekLogs
         : monthLogs;
+
+  // The "Day by day" recap is a rolling last-7-days list, not the full history.
+  // weekLogs already comes back newest-first, so just drop anything older.
+  const recentLogs = weekLogs.filter(l => isWithinSevenDays(l.date));
 
   function formatDate(dateStr: string): string {
     const date = parseLocalDate(dateStr);
@@ -167,7 +184,7 @@ export default function DashboardScreen() {
                 ...s.toggleBtn,
                 ...(range === r ? s.toggleBtnActive : {}),
               }}
-              onClick={() => setRange(r)}
+              onClick={() => selectRange(r)}
             >
               <span
                 style={{
@@ -446,11 +463,11 @@ export default function DashboardScreen() {
               </div>
             )}
 
-            {/* Day by day list */}
-            {range !== "today" && (
+            {/* Day by day list — last 7 days only (Month has the calendar) */}
+            {range === "week" && (
               <>
                 <div style={s.sectionLabel}>DAY BY DAY</div>
-                {visibleLogs.map((entry, i) => (
+                {recentLogs.map((entry, i) => (
                   <button
                     key={i}
                     style={s.dayCard}

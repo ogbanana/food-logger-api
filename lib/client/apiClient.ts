@@ -272,6 +272,8 @@ export type MessageType = {
   outOfRange?: boolean;
   pending?: boolean;
   doneLabel?: string;
+  // For "error" messages: whether to offer a one-tap retry (recoverable errors).
+  canRetry?: boolean;
 };
 
 export type AnalyzeResponse = CalorieLog & {

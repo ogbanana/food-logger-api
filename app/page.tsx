@@ -6,22 +6,41 @@ import AppChrome from "../components/web/AppChrome";
 import Spinner from "../components/web/Spinner";
 import DateTimeHeader from "../components/web/DateTimeHeader";
 import { SteakIcon } from "../components/web/icons/EmojiIcons";
+import NotebookIcon from "../components/web/icons/NotebookIcon";
 import {
   analyzeFood,
   addMealsToDay,
   resolveDate,
   fetchUsage,
+  fetchDayLog,
   type CalorieLog,
+  type DailyLog,
   type Meal,
   type Message,
   type MessageType,
 } from "../lib/client/apiClient";
+import { getItem, setItem } from "../lib/client/storage";
 import { useTheme, type Colors } from "../lib/client/ThemeContext";
 import {
   localDateStr,
   parseLocalDate,
   isWithinSevenDays,
 } from "../lib/client/utils";
+
+// Recent submissions are stashed locally so a failed analysis (or a reload)
+// never costs the user their typed-out meals. Newest first, capped.
+const RECENTS_KEY = "recentLogInputs";
+const RECENTS_MAX = 8;
+
+function loadRecents(): string[] {
+  try {
+    const raw = getItem(RECENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.slice(0, RECENTS_MAX) : [];
+  } catch {
+    return [];
+  }
+}
 
 // Shown after a past-day log (or when a day is out of range) to point users at
 // the dashboard calendar for older days.
@@ -67,7 +86,13 @@ export default function LogScreen() {
     originalText: string;
   } | null>(null);
   const [example, setExample] = useState(EXAMPLES[0]);
+  // Today's saved log, so the user can see everything consumed today in one
+  // place without scrolling back through the chat.
+  const [todayLog, setTodayLog] = useState<DailyLog | null>(null);
+  const [showToday, setShowToday] = useState(false);
+  const [recents, setRecents] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -76,6 +101,11 @@ export default function LogScreen() {
     // server and client initial markup match and hydration stays clean.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExample(EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]);
+    setRecents(loadRecents());
+    // Drop the cursor into the box on landing so users can start typing (and
+    // see the blinking caret) without a tap.
+    inputRef.current?.focus();
+    refreshToday();
     fetchUsage()
       .then(u => {
         setRemaining(u.remaining);
@@ -83,6 +113,24 @@ export default function LogScreen() {
       })
       .catch(() => {});
   }, []);
+
+  async function refreshToday() {
+    try {
+      setTodayLog(await fetchDayLog(localDateStr()));
+    } catch {
+      // No log for today yet (or it was cleared) — nothing to show.
+      setTodayLog(null);
+    }
+  }
+
+  // Remember a submitted text for one-tap reuse, newest first and de-duped.
+  function rememberInput(text: string) {
+    setRecents(prev => {
+      const next = [text, ...prev.filter(t => t !== text)].slice(0, RECENTS_MAX);
+      setItem(RECENTS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
 
   function scrollToEnd() {
     setTimeout(() => {
@@ -104,6 +152,7 @@ export default function LogScreen() {
       return;
     }
 
+    rememberInput(text);
     setLoading(true);
     setMessages(prev => [...prev, { type: "user", text }]);
     scrollToEnd();
@@ -154,8 +203,12 @@ export default function LogScreen() {
       ]);
 
       setMessages(prev => [...prev, { type: "result", data }]);
+      refreshToday();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      // Put the text back in the box so a failed send never costs the user
+      // their typing — especially painful for a whole day's worth of meals.
+      setInput(text);
       if (message === "RATE_LIMIT_EXCEEDED") {
         setMessages(prev => [
           ...prev,
@@ -165,7 +218,8 @@ export default function LogScreen() {
           },
         ]);
       } else {
-        setMessages(prev => [...prev, { type: "error", text: message }]);
+        // Recoverable failure (network/server) — offer a one-tap retry.
+        setMessages(prev => [...prev, { type: "error", text: message, canRetry: true }]);
       }
     } finally {
       setLoading(false);
@@ -276,12 +330,39 @@ export default function LogScreen() {
   }
 
   const s = makeStyles(colors);
+  // The floating "Today" button only appears once there's something logged
+  // today; when it's there we reserve top space so it doesn't sit on the date.
+  const hasTodayFab = !!(todayLog && todayLog.meals.length > 0);
 
   return (
     <AppChrome>
       <div style={s.root}>
+        {hasTodayFab && (
+          <button
+            style={s.todayFab}
+            onClick={() => setShowToday(true)}
+            aria-label="Show today's food"
+          >
+            <NotebookIcon size={18} color={colors.calText} />
+            <span style={s.todayFabText}>Today</span>
+          </button>
+        )}
+
+        {showToday && todayLog && (
+          <TodayPopover
+            log={todayLog}
+            colors={colors}
+            onClose={() => setShowToday(false)}
+          />
+        )}
+
         <div ref={scrollRef} style={s.messages}>
-          <div style={s.messagesContent}>
+          <div
+            style={{
+              ...s.messagesContent,
+              ...(hasTodayFab ? { paddingTop: 64 } : {}),
+            }}
+          >
             <DateTimeHeader />
 
             <div style={s.assistantBubble}>
@@ -335,6 +416,15 @@ export default function LogScreen() {
                         </span>
                       )}
                     </span>
+                    {msg.canRetry && (
+                      <button
+                        style={s.retryBtn}
+                        onClick={analyze}
+                        disabled={loading}
+                      >
+                        Retry
+                      </button>
+                    )}
                   </div>
                 );
               }
@@ -384,8 +474,25 @@ export default function LogScreen() {
           </div>
         )}
 
+        {recents.length > 0 && !pendingConfirm && (
+          <div style={s.recentsRow}>
+            <span style={s.recentsLabel}>Recent</span>
+            {recents.map((text, i) => (
+              <button
+                key={i}
+                style={s.recentChip}
+                title={text}
+                onClick={() => setInput(text)}
+              >
+                {text.length > 32 ? `${text.slice(0, 32)}…` : text}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div style={s.inputArea}>
           <textarea
+            ref={inputRef}
             style={s.textInput}
             placeholder={
               pendingConfirm
@@ -409,6 +516,47 @@ export default function LogScreen() {
         </div>
       </div>
     </AppChrome>
+  );
+}
+
+// A pop-over recap of everything logged for today, opened from the floating
+// "Today" button. Keeps the items off the (crowded) main log surface until
+// asked for. The backdrop dismisses on tap.
+function TodayPopover({
+  log,
+  colors,
+  onClose,
+}: {
+  log: DailyLog;
+  colors: Colors;
+  onClose: () => void;
+}) {
+  const s = makeStyles(colors);
+  return (
+    <>
+      <div style={s.todayBackdrop} onClick={onClose} />
+      <div style={s.todayPopover} role="dialog" aria-label="Today's food">
+        <div style={s.todayPopoverHeader}>
+          <div>
+            <div style={s.todayTitle}>Today so far</div>
+            <div style={s.todayCals}>
+              {log.cal_low}–{log.cal_high} kcal
+            </div>
+          </div>
+          <button style={s.todayClose} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <div style={s.todayBody}>
+          {log.meals.map((meal, i) => (
+            <div key={i} style={s.todayItem}>
+              <span style={s.todayMealName}>{meal.meal}</span>
+              <span style={s.todayMealItems}>{meal.items.join(", ")}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -593,6 +741,7 @@ function Pill({ bg, text, label }: { bg: string; text: string; label: string }) 
 function makeStyles(colors: Colors): Record<string, CSSProperties> {
   return {
     root: {
+      position: "relative",
       height: "100%",
       display: "flex",
       flexDirection: "column",
@@ -661,6 +810,18 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       color: colors.error,
       fontFamily: "var(--font-geist-mono), monospace",
     },
+    retryBtn: {
+      display: "block",
+      marginTop: 10,
+      backgroundColor: colors.surface,
+      color: colors.error,
+      border: `0.5px solid ${colors.error}55`,
+      borderRadius: 10,
+      padding: "6px 14px",
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: 600,
+    },
 
     card: {
       backgroundColor: colors.surface,
@@ -721,6 +882,138 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
     totalValue: { fontSize: 16, fontWeight: 500 },
     totalUnit: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
 
+    todayFab: {
+      position: "absolute",
+      top: 12,
+      right: 16,
+      zIndex: 30,
+      width: 56,
+      height: 56,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 1,
+      borderRadius: "50%",
+      backgroundColor: colors.calBg,
+      border: `0.5px solid ${colors.calText}55`,
+      boxShadow:
+        "0 6px 16px rgba(16,24,40,0.20), 0 2px 6px rgba(216,149,25,0.40)",
+      cursor: "pointer",
+    },
+    todayFabText: {
+      fontSize: 9,
+      fontWeight: 700,
+      color: colors.calText,
+      lineHeight: 1,
+    },
+
+    todayBackdrop: {
+      position: "absolute",
+      inset: 0,
+      zIndex: 40,
+      backgroundColor: "rgba(0,0,0,0.25)",
+    },
+    todayPopover: {
+      position: "absolute",
+      top: 52,
+      right: 16,
+      zIndex: 50,
+      width: 280,
+      maxWidth: "calc(100% - 32px)",
+      maxHeight: "70%",
+      overflowY: "auto",
+      backgroundColor: colors.surface,
+      border: `0.5px solid ${colors.border}`,
+      borderRadius: 16,
+      boxShadow: "0 8px 24px rgba(16,24,40,0.18)",
+      padding: 14,
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+    },
+    todayPopoverHeader: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    todayTitle: {
+      fontSize: 12,
+      fontWeight: 600,
+      letterSpacing: 0.4,
+      color: colors.textSecondary,
+    },
+    todayCals: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: colors.calText,
+      marginTop: 2,
+    },
+    todayClose: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: colors.textMuted,
+      fontSize: 14,
+      flexShrink: 0,
+      padding: 0,
+    },
+    todayBody: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+    },
+    todayItem: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 2,
+      paddingTop: 8,
+      borderTop: `0.5px solid ${colors.border}`,
+    },
+    todayMealName: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: colors.textPrimary,
+    },
+    todayMealItems: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 1.4,
+    },
+
+    recentsRow: {
+      flexShrink: 0,
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      padding: "14px 16px",
+      overflowX: "auto",
+      backgroundColor: colors.surface,
+    },
+    recentsLabel: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: colors.textMuted,
+      flexShrink: 0,
+    },
+    recentChip: {
+      flexShrink: 0,
+      backgroundColor: colors.surfaceAlt,
+      border: `0.5px solid ${colors.border}`,
+      borderRadius: 99,
+      padding: "5px 12px",
+      fontSize: 12,
+      color: colors.textSecondary,
+      cursor: "pointer",
+      whiteSpace: "nowrap",
+      maxWidth: 220,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+    },
+
     inputArea: {
       borderTop: `0.5px solid ${colors.border}`,
       padding: 14,
@@ -731,13 +1024,16 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       flexShrink: 0,
     },
     textInput: {
-      border: `0.5px solid ${colors.inputBorder}`,
-      borderRadius: 16,
-      padding: 12,
+      // Borderless / transparent so it reads as part of the input bar rather
+      // than a boxed bubble — keeps the crowded bottom area feeling cleaner.
+      border: "none",
+      outline: "none",
+      borderRadius: 0,
+      padding: "4px 2px",
       fontSize: 14,
-      minHeight: 80,
+      minHeight: 64,
       color: colors.textPrimary,
-      backgroundColor: colors.inputBg,
+      backgroundColor: "transparent",
       resize: "none",
     },
     sendBtn: {
