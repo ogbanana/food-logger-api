@@ -220,48 +220,7 @@ export default function DashboardScreen() {
           <>
             {/* Summary cards */}
             {range === "today" ? (
-              <>
-                <SummaryCard
-                  label="Calories"
-                  value={
-                    todayLog ? `${todayLog.cal_low}–${todayLog.cal_high}` : "0"
-                  }
-                  unit="kcal today"
-                  color={colors.calText}
-                  colors={colors}
-                  hero
-                />
-                <div style={s.summaryGrid}>
-                  <SummaryCard
-                    label="Protein"
-                    value={`${totalProtein}g`}
-                    unit="today"
-                    color={colors.proteinText}
-                    colors={colors}
-                  />
-                  <SummaryCard
-                    label="Carbs"
-                    value={`${totalCarbs}g`}
-                    unit="today"
-                    color={colors.carbsText}
-                    colors={colors}
-                  />
-                  <SummaryCard
-                    label="Fat"
-                    value={`${totalFat}g`}
-                    unit="today"
-                    color={colors.fatText}
-                    colors={colors}
-                  />
-                  <SummaryCard
-                    label="Fiber"
-                    value={`${totalFiber}g`}
-                    unit="today"
-                    color={colors.fiberText}
-                    colors={colors}
-                  />
-                </div>
-              </>
+              todayLog && <DayTotalCard log={todayLog} colors={colors} />
             ) : (
               <div style={s.summaryGrid}>
                 <SummaryCard
@@ -305,62 +264,90 @@ export default function DashboardScreen() {
             {/* Today: progress + macros */}
             {range === "today" && todayLog && (
               <div style={s.card}>
-                <div style={s.cardLabel}>PROGRESS TO GOAL</div>
-                <div style={s.progressTrack}>
-                  <div
-                    style={{
-                      ...s.progressFill,
-                      width: `${Math.min((todayLog.cal_high / target) * 100, 100)}%`,
-                      backgroundColor:
-                        todayLog.cal_high > target
-                          ? colors.error
-                          : colors.calText,
-                    }}
-                  />
-                </div>
-                <div style={s.progressLabels}>
-                  <span style={s.progressSide}>
-                    {todayLog.cal_low} kcal low
-                  </span>
-                  <span style={s.progressMid}>{target} kcal goal</span>
-                  <span style={s.progressSide}>
-                    {todayLog.cal_high} kcal high
-                  </span>
-                </div>
+                <div style={s.cardLabel}>Calorie Progress Bar</div>
+                {(() => {
+                  const pct = Math.min((todayLog.cal_high / target) * 100, 100);
+                  const fillColor =
+                    todayLog.cal_high > target ? colors.error : colors.calText;
+                  const calText = `${todayLog.cal_low}–${todayLog.cal_high} kcal`;
+                  const goalText = target.toLocaleString();
+                  return (
+                    <div style={s.calBarTrack}>
+                      {/* Base layer: dark text, reads against the empty track. */}
+                      <div style={s.calBarRow}>
+                        <span
+                          style={{
+                            ...s.calBarCurrent,
+                            color: colors.textPrimary,
+                          }}
+                        >
+                          {calText}
+                        </span>
+                        <span
+                          style={{
+                            ...s.calBarGoal,
+                            color: colors.textSecondary,
+                          }}
+                        >
+                          {goalText}
+                        </span>
+                      </div>
+                      {/* Filled portion: the same labels in white, clipped to
+                          the fill width so white only shows over the fill. The
+                          inner row is sized back up to the full track width so
+                          its text lines up exactly with the base layer. */}
+                      {pct > 0 && (
+                        <div
+                          style={{
+                            ...s.calBarFill,
+                            width: `${pct}%`,
+                            backgroundColor: fillColor,
+                          }}
+                        >
+                          <div
+                            style={{
+                              ...s.calBarFillRow,
+                              width: `${(100 / pct) * 100}%`,
+                            }}
+                          >
+                            <span style={{ ...s.calBarCurrent, color: "#fff" }}>
+                              {calText}
+                            </span>
+                            <span style={{ ...s.calBarGoal, color: "#fff" }}>
+                              {goalText}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
-                <div style={{ ...s.cardLabel, marginTop: 16 }}>MACROS</div>
-                <MacroBar
-                  label="Protein"
-                  value={todayLog.protein_g}
-                  max={200}
-                  color={colors.proteinText}
-                  bg={colors.proteinBg}
-                  colors={colors}
-                />
-                <MacroBar
-                  label="Carbs"
-                  value={todayLog.carbs_g}
-                  max={300}
-                  color={colors.carbsText}
-                  bg={colors.carbsBg}
-                  colors={colors}
-                />
-                <MacroBar
-                  label="Fat"
-                  value={todayLog.fat_g}
-                  max={100}
-                  color={colors.fatText}
-                  bg={colors.fatBg}
-                  colors={colors}
-                />
-                <MacroBar
-                  label="Fiber"
-                  value={todayLog.fiber_g}
-                  max={50}
-                  color={colors.fiberText}
-                  bg={colors.fiberBg}
-                  colors={colors}
-                />
+            {/* Today's meals — read-only recall. Editing lives on the Log
+                screen (the "View & Edit" button below), so these rows are
+                intentionally static with no tap target or macros. */}
+            {range === "today" && todayLog && todayLog.meals.length > 0 && (
+              <div style={s.card}>
+                <div style={s.cardLabel}>TODAY&apos;S MEALS</div>
+                {todayLog.meals.map((meal, i) => (
+                  <div
+                    key={meal.id}
+                    style={{
+                      ...s.mealRow,
+                      ...(i === 0 ? s.mealRowFirst : {}),
+                    }}
+                  >
+                    <div style={s.mealRowText}>
+                      <span style={s.mealName}>{meal.meal}</span>
+                      <span style={s.mealItems}>{meal.items.join(", ")}</span>
+                    </div>
+                    <span style={s.mealCals}>
+                      {meal.cal_low}–{meal.cal_high} kcal
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -575,36 +562,78 @@ function SummaryCard({
   );
 }
 
-function MacroBar({
+// Reuses the "Day Total" card from the Log screen so the Today summary matches
+// the layout the user already sees when logging a meal.
+function DayTotalCard({ log, colors }: { log: DailyLog; colors: Colors }) {
+  const s = makeStyles(colors);
+  return (
+    <div style={s.card}>
+      <div style={s.cardLabel}>DAY TOTAL</div>
+
+      <div style={s.totalSplit}>
+        <div style={{ ...s.totalHero, backgroundColor: colors.calBg }}>
+          <div style={s.totalHeroLabel}>Calories</div>
+          <div style={s.totalHeroValueRow}>
+            <span style={{ ...s.totalHeroValue, color: colors.calText }}>
+              {log.cal_low}–{log.cal_high}
+            </span>
+            <span style={s.totalUnit}>kcal</span>
+          </div>
+        </div>
+
+        <div style={s.macroGrid}>
+          <TotalCell
+            label="Protein"
+            value={`${log.protein_g}g`}
+            bg={colors.proteinBg}
+            color={colors.proteinText}
+            colors={colors}
+          />
+          <TotalCell
+            label="Carbs"
+            value={`${log.carbs_g}g`}
+            bg={colors.carbsBg}
+            color={colors.carbsText}
+            colors={colors}
+          />
+          <TotalCell
+            label="Fat"
+            value={`${log.fat_g}g`}
+            bg={colors.fatBg}
+            color={colors.fatText}
+            colors={colors}
+          />
+          <TotalCell
+            label="Fiber"
+            value={`${log.fiber_g}g`}
+            bg={colors.fiberBg}
+            color={colors.fiberText}
+            colors={colors}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TotalCell({
   label,
   value,
-  max,
-  color,
   bg,
+  color,
   colors,
 }: {
   label: string;
-  value: number;
-  max: number;
-  color: string;
+  value: string;
   bg: string;
+  color: string;
   colors: Colors;
 }) {
-  const pct = Math.min((value / max) * 100, 100);
   const s = makeStyles(colors);
   return (
-    <div style={s.macroBarRow}>
-      <span style={s.macroBarLabel}>{label}</span>
-      <div style={{ ...s.macroBarTrack, backgroundColor: bg }}>
-        <div
-          style={{
-            ...s.macroBarFill,
-            width: `${pct}%`,
-            backgroundColor: color,
-          }}
-        />
-      </div>
-      <span style={{ ...s.macroBarValue, color }}>{value}g</span>
+    <div style={{ ...s.totalCell, backgroundColor: bg }}>
+      <div style={s.totalLabel}>{label}</div>
+      <div style={{ ...s.totalValue, color }}>{value}</div>
     </div>
   );
 }
@@ -844,43 +873,123 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       marginBottom: 10,
     },
 
-    progressTrack: {
-      height: 12,
+    mealRow: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 12,
+      paddingTop: 10,
+      marginTop: 10,
+      borderTop: `0.5px solid ${colors.border}`,
+    },
+    mealRowFirst: { paddingTop: 0, marginTop: 0, borderTop: "none" },
+    mealRowText: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 2,
+      flex: 1,
+      minWidth: 0,
+    },
+    mealName: { fontSize: 14, fontWeight: 600, color: colors.textPrimary },
+    mealItems: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 1.4,
+    },
+    mealCals: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: colors.calText,
+      whiteSpace: "nowrap",
+      flexShrink: 0,
+    },
+
+    totalSplit: {
+      display: "flex",
+      flexDirection: "row",
+      gap: 6,
+      alignItems: "stretch",
+    },
+    totalHero: {
+      flex: "0 0 36%",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      borderRadius: 10,
+      padding: 10,
+    },
+    totalHeroLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 2,
+    },
+    totalHeroValueRow: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 4,
+    },
+    totalHeroValue: { fontSize: 22, fontWeight: 600, letterSpacing: -0.5 },
+    totalUnit: { fontSize: 9, color: colors.textMuted },
+    macroGrid: {
+      flex: 1,
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 6,
+    },
+    totalCell: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      gap: 6,
+      minWidth: 0,
+      borderRadius: 10,
+      padding: "6px 8px",
+    },
+    totalLabel: { fontSize: 11, color: colors.textSecondary },
+    totalValue: { fontSize: 14, fontWeight: 500 },
+
+    calBarTrack: {
+      position: "relative",
+      height: 32,
       backgroundColor: colors.border,
       borderRadius: 99,
       overflow: "hidden",
     },
-    progressFill: { height: "100%", borderRadius: 99 },
-    progressLabels: {
+    calBarRow: {
+      position: "absolute",
+      inset: 0,
       display: "flex",
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginTop: 6,
-    },
-    progressSide: { fontSize: 11, color: colors.textSecondary },
-    progressMid: { fontSize: 11, color: colors.textMuted },
-
-    macroBarRow: {
-      display: "flex",
-      flexDirection: "row",
       alignItems: "center",
-      gap: 8,
-      marginBottom: 8,
     },
-    macroBarLabel: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      width: 48,
-      flexShrink: 0,
+    calBarFill: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      height: "100%",
+      overflow: "hidden",
     },
-    macroBarTrack: { flex: 1, height: 8, borderRadius: 99, overflow: "hidden" },
-    macroBarFill: { height: "100%", borderRadius: 99 },
-    macroBarValue: {
+    calBarFillRow: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+    },
+    calBarCurrent: {
+      marginLeft: 12,
+      fontSize: 13,
+      fontWeight: 600,
+      whiteSpace: "nowrap",
+    },
+    calBarGoal: {
+      marginLeft: "auto",
+      marginRight: 12,
       fontSize: 12,
-      fontWeight: 500,
-      width: 36,
-      textAlign: "right",
-      flexShrink: 0,
+      fontWeight: 600,
+      whiteSpace: "nowrap",
     },
 
     chart: {
