@@ -57,6 +57,9 @@ export default function TabBar() {
           <DashboardIcon
             color={dashActive ? colors.tabActive : colors.tabInactive}
             size={24}
+            barFills={
+              dashActive ? ["#2563EB", "#2F9E44", "#E03131"] : undefined
+            }
           />
         }
       />
