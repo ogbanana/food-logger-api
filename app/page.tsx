@@ -42,6 +42,28 @@ function loadRecents(): string[] {
   }
 }
 
+// Today's chat is stashed locally so returning to the screen (or a reload)
+// restores the conversation instead of starting blank. Scoped to a single day:
+// the stored date is checked on load, so a new day always starts fresh.
+const CHAT_KEY = "logChat";
+
+function loadChat(today: string): {
+  messages: MessageType[];
+  history: Message[];
+} {
+  try {
+    const raw = getItem(CHAT_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || parsed.date !== today) return { messages: [], history: [] };
+    return {
+      messages: Array.isArray(parsed.messages) ? parsed.messages : [],
+      history: Array.isArray(parsed.history) ? parsed.history : [],
+    };
+  } catch {
+    return { messages: [], history: [] };
+  }
+}
+
 // Shown after a past-day log (or when a day is out of range) to point users at
 // the dashboard calendar for older days.
 const PREV_DAY_GUIDE =
@@ -102,6 +124,12 @@ export default function LogScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExample(EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]);
     setRecents(loadRecents());
+    // Restore today's conversation, if any. Done after mount (not in the
+    // initializer) so the server-rendered empty chat and the client's first
+    // render match and hydration stays clean.
+    const savedChat = loadChat(localDateStr());
+    if (savedChat.messages.length) setMessages(savedChat.messages);
+    if (savedChat.history.length) setHistory(savedChat.history);
     // Drop the cursor into the box on landing so users can start typing (and
     // see the blinking caret) without a tap.
     inputRef.current?.focus();
@@ -113,6 +141,16 @@ export default function LogScreen() {
       })
       .catch(() => {});
   }, []);
+
+  // Keep the local stash in sync as the conversation grows. Skipping the empty
+  // initial state avoids clobbering a saved chat before the mount restore runs.
+  useEffect(() => {
+    if (messages.length === 0 && history.length === 0) return;
+    setItem(
+      CHAT_KEY,
+      JSON.stringify({ date: localDateStr(), messages, history }),
+    );
+  }, [messages, history]);
 
   async function refreshToday() {
     try {
@@ -126,7 +164,10 @@ export default function LogScreen() {
   // Remember a submitted text for one-tap reuse, newest first and de-duped.
   function rememberInput(text: string) {
     setRecents(prev => {
-      const next = [text, ...prev.filter(t => t !== text)].slice(0, RECENTS_MAX);
+      const next = [text, ...prev.filter(t => t !== text)].slice(
+        0,
+        RECENTS_MAX,
+      );
       setItem(RECENTS_KEY, JSON.stringify(next));
       return next;
     });
@@ -182,7 +223,11 @@ export default function LogScreen() {
       // user can answer with yes / no / a corrected day, then append to that day
       // rather than overwriting it.
       if (data.needs_confirmation && data.inferred_date) {
-        setPendingConfirm({ data, date: data.inferred_date, originalText: text });
+        setPendingConfirm({
+          data,
+          date: data.inferred_date,
+          originalText: text,
+        });
         scrollToEnd();
         return;
       }
@@ -219,7 +264,10 @@ export default function LogScreen() {
         ]);
       } else {
         // Recoverable failure (network/server) — offer a one-tap retry.
-        setMessages(prev => [...prev, { type: "error", text: message, canRetry: true }]);
+        setMessages(prev => [
+          ...prev,
+          { type: "error", text: message, canRetry: true },
+        ]);
       }
     } finally {
       setLoading(false);
@@ -266,7 +314,9 @@ export default function LogScreen() {
 
   function cancelConfirm() {
     setPendingConfirm(null);
-    pushAssistant("Okay, I won't log that. Tell me what you ate whenever you're ready.");
+    pushAssistant(
+      "Okay, I won't log that. Tell me what you ate whenever you're ready.",
+    );
   }
 
   // Interpret a typed reply to an open confirmation: yes / no / a corrected day.
@@ -333,6 +383,11 @@ export default function LogScreen() {
   // The floating "Today" button only appears once there's something logged
   // today; when it's there we reserve top space so it doesn't sit on the date.
   const hasTodayFab = !!(todayLog && todayLog.meals.length > 0);
+  // Returning users (they've logged on this device before) skip the onboarding
+  // welcome and get a shorter prompt that keeps the only universally useful bit
+  // — the free-form example. `recents` loads after mount, so first paint shows
+  // the welcome and swaps in the short hint once we know they're a regular.
+  const isReturning = recents.length > 0;
 
   return (
     <AppChrome>
@@ -367,13 +422,22 @@ export default function LogScreen() {
 
             <div style={s.assistantBubble}>
               <span style={s.assistantText}>
-                Hey! Welcome to Food Logger — just dump everything you ate today
-                in one go, no format needed.
-                <br />
-                <br />
-                Something like{" "}
-                <span style={s.italic}>&quot;{example}&quot;</span> works
-                perfectly.
+                {isReturning ? (
+                  <>
+                    What&apos;d you eat? Dump it all in one go — something like{" "}
+                    <span style={s.italic}>&quot;{example}&quot;</span> works.
+                  </>
+                ) : (
+                  <>
+                    Hey! Welcome to Food Logger — just dump everything you ate
+                    today in one go, no format needed.
+                    <br />
+                    <br />
+                    Something like{" "}
+                    <span style={s.italic}>&quot;{example}&quot;</span> works
+                    perfectly.
+                  </>
+                )}
               </span>
             </div>
 
@@ -572,22 +636,50 @@ function ResultCard({ data, colors }: { data: CalorieLog; colors: Colors }) {
         <MealCard key={i} meal={meal} colors={colors} />
       ))}
 
-      <div style={s.card}>
+      <div style={{ ...s.card, marginBottom: 10 }}>
         <div style={s.cardLabel}>DAY TOTAL</div>
 
-        <div style={{ ...s.totalHero, backgroundColor: colors.calBg }}>
-          <div style={s.totalHeroLabel}>Calories</div>
-          <div style={{ ...s.totalHeroValue, color: colors.calText }}>
-            {data.totals.cal_low}–{data.totals.cal_high}
+        <div style={s.totalSplit}>
+          <div style={{ ...s.totalHero, backgroundColor: colors.calBg }}>
+            <div style={s.totalHeroLabel}>Calories</div>
+            <div style={s.totalHeroValueRow}>
+              <span style={{ ...s.totalHeroValue, color: colors.calText }}>
+                {data.totals.cal_low}–{data.totals.cal_high}
+              </span>
+              <span style={s.totalUnit}>kcal</span>
+            </div>
           </div>
-          <div style={s.totalUnit}>kcal</div>
-        </div>
 
-        <div style={s.macroGrid}>
-          <TotalCell label="Protein" value={`${data.totals.protein_g}g`} unit="est." bg={colors.proteinBg} color={colors.proteinText} colors={colors} />
-          <TotalCell label="Carbs" value={`${data.totals.carbs_g}g`} unit="est." bg={colors.carbsBg} color={colors.carbsText} colors={colors} />
-          <TotalCell label="Fat" value={`${data.totals.fat_g}g`} unit="est." bg={colors.fatBg} color={colors.fatText} colors={colors} />
-          <TotalCell label="Fiber" value={`${data.totals.fiber_g}g`} unit="est." bg={colors.fiberBg} color={colors.fiberText} colors={colors} />
+          <div style={s.macroGrid}>
+            <TotalCell
+              label="Protein"
+              value={`${data.totals.protein_g}g`}
+              bg={colors.proteinBg}
+              color={colors.proteinText}
+              colors={colors}
+            />
+            <TotalCell
+              label="Carbs"
+              value={`${data.totals.carbs_g}g`}
+              bg={colors.carbsBg}
+              color={colors.carbsText}
+              colors={colors}
+            />
+            <TotalCell
+              label="Fat"
+              value={`${data.totals.fat_g}g`}
+              bg={colors.fatBg}
+              color={colors.fatText}
+              colors={colors}
+            />
+            <TotalCell
+              label="Fiber"
+              value={`${data.totals.fiber_g}g`}
+              bg={colors.fiberBg}
+              color={colors.fiberText}
+              colors={colors}
+            />
+          </div>
         </div>
       </div>
 
@@ -674,11 +766,31 @@ function MealCard({ meal, colors }: { meal: Meal; colors: Colors }) {
       <div style={s.cardLabel}>{meal.meal.toUpperCase()}</div>
       <div style={s.mealItems}>{meal.items.join(", ")}</div>
       <div style={s.pillRow}>
-        <Pill bg={colors.calBg} text={colors.calText} label={`C ${meal.cal_low}–${meal.cal_high} kcal`} />
-        <Pill bg={colors.proteinBg} text={colors.proteinText} label={`P ${meal.protein_g}g`} />
-        <Pill bg={colors.carbsBg} text={colors.carbsText} label={`Cb ${meal.carbs_g}g`} />
-        <Pill bg={colors.fatBg} text={colors.fatText} label={`F ${meal.fat_g}g`} />
-        <Pill bg={colors.fiberBg} text={colors.fiberText} label={`Fi ${meal.fiber_g}g`} />
+        <Pill
+          bg={colors.calBg}
+          text={colors.calText}
+          label={`C ${meal.cal_low}–${meal.cal_high} kcal`}
+        />
+        <Pill
+          bg={colors.proteinBg}
+          text={colors.proteinText}
+          label={`P ${meal.protein_g}g`}
+        />
+        <Pill
+          bg={colors.carbsBg}
+          text={colors.carbsText}
+          label={`Cb ${meal.carbs_g}g`}
+        />
+        <Pill
+          bg={colors.fatBg}
+          text={colors.fatText}
+          label={`F ${meal.fat_g}g`}
+        />
+        <Pill
+          bg={colors.fiberBg}
+          text={colors.fiberText}
+          label={`Fi ${meal.fiber_g}g`}
+        />
       </div>
       {meal.assumption && (
         <div>
@@ -698,14 +810,12 @@ function MealCard({ meal, colors }: { meal: Meal; colors: Colors }) {
 function TotalCell({
   label,
   value,
-  unit,
   bg,
   color,
   colors,
 }: {
   label: string;
   value: string;
-  unit: string;
   bg: string;
   color: string;
   colors: Colors;
@@ -715,12 +825,19 @@ function TotalCell({
     <div style={{ ...s.totalCell, backgroundColor: bg }}>
       <div style={s.totalLabel}>{label}</div>
       <div style={{ ...s.totalValue, color }}>{value}</div>
-      <div style={s.totalUnit}>{unit}</div>
     </div>
   );
 }
 
-function Pill({ bg, text, label }: { bg: string; text: string; label: string }) {
+function Pill({
+  bg,
+  text,
+  label,
+}: {
+  bg: string;
+  text: string;
+  label: string;
+}) {
   return (
     <span
       style={{
@@ -846,7 +963,12 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       lineHeight: 1.5,
     },
 
-    pillRow: { display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 6 },
+    pillRow: {
+      display: "flex",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
 
     assumption: {
       fontSize: 12,
@@ -864,23 +986,51 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       padding: 0,
     },
 
-    totalHero: {
-      borderRadius: 14,
-      padding: 12,
-      marginBottom: 8,
+    totalSplit: {
+      display: "flex",
+      flexDirection: "row",
+      gap: 6,
+      alignItems: "stretch",
     },
-    totalHeroLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
-    totalHeroValue: { fontSize: 24, fontWeight: 600, letterSpacing: -0.5 },
-    macroGrid: { display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    totalCell: {
-      flexGrow: 1,
-      flexBasis: "45%",
-      borderRadius: 14,
+    totalHero: {
+      flex: "0 0 36%",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      borderRadius: 10,
       padding: 10,
     },
-    totalLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
-    totalValue: { fontSize: 16, fontWeight: 500 },
-    totalUnit: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+    totalHeroLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 2,
+    },
+    totalHeroValueRow: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 4,
+    },
+    totalHeroValue: { fontSize: 22, fontWeight: 600, letterSpacing: -0.5 },
+    macroGrid: {
+      flex: 1,
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 6,
+    },
+    totalCell: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      gap: 6,
+      minWidth: 0,
+      borderRadius: 10,
+      padding: "6px 8px",
+    },
+    totalLabel: { fontSize: 11, color: colors.textSecondary },
+    totalValue: { fontSize: 14, fontWeight: 500 },
+    totalUnit: { fontSize: 9, color: colors.textMuted },
 
     todayFab: {
       position: "absolute",
