@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, useEffect, type CSSProperties } from "react";
+import {
+  useRef,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  type CSSProperties,
+} from "react";
 import { useRouter } from "next/navigation";
 import AppChrome from "../components/web/AppChrome";
 import Spinner from "../components/web/Spinner";
@@ -27,8 +33,6 @@ import {
   isWithinSevenDays,
 } from "../lib/client/utils";
 
-// Recent submissions are stashed locally so a failed analysis (or a reload)
-// never costs the user their typed-out meals. Newest first, capped.
 const RECENTS_KEY = "recentLogInputs";
 const RECENTS_MAX = 8;
 
@@ -42,9 +46,6 @@ function loadRecents(): string[] {
   }
 }
 
-// Today's chat is stashed locally so returning to the screen (or a reload)
-// restores the conversation instead of starting blank. Scoped to a single day:
-// the stored date is checked on load, so a new day always starts fresh.
 const CHAT_KEY = "logChat";
 
 function loadChat(today: string): {
@@ -64,14 +65,11 @@ function loadChat(today: string): {
   }
 }
 
-// Shown after a past-day log (or when a day is out of range) to point users at
-// the dashboard calendar for older days.
 const PREV_DAY_GUIDE =
   "To log food for previous days, head to Dashboard → Month and tap the day. You can only update food logs up to 7 days ago.";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/** A friendly label for a logged-for date, e.g. "Yesterday (Mon 6/22)". */
 function dayLabel(dateStr: string, todayStr: string): string {
   const d = parseLocalDate(dateStr);
   const t = parseLocalDate(todayStr);
@@ -101,37 +99,28 @@ export default function LogScreen() {
   const [history, setHistory] = useState<Message[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [limit, setLimit] = useState(20);
-  // A parsed log awaiting the user's confirmation of which past day it's for.
   const [pendingConfirm, setPendingConfirm] = useState<{
     data: CalorieLog;
     date: string;
     originalText: string;
   } | null>(null);
   const [example, setExample] = useState(EXAMPLES[0]);
-  // Today's saved log, so the user can see everything consumed today in one
-  // place without scrolling back through the chat.
   const [todayLog, setTodayLog] = useState<DailyLog | null>(null);
   const [showToday, setShowToday] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pinnedToBottom = useRef(true);
   const { colors } = useTheme();
   const router = useRouter();
 
   useEffect(() => {
-    // Randomize the placeholder example after mount (not during render) so the
-    // server and client initial markup match and hydration stays clean.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExample(EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]);
     setRecents(loadRecents());
-    // Restore today's conversation, if any. Done after mount (not in the
-    // initializer) so the server-rendered empty chat and the client's first
-    // render match and hydration stays clean.
     const savedChat = loadChat(localDateStr());
     if (savedChat.messages.length) setMessages(savedChat.messages);
     if (savedChat.history.length) setHistory(savedChat.history);
-    // Drop the cursor into the box on landing so users can start typing (and
-    // see the blinking caret) without a tap.
     inputRef.current?.focus();
     refreshToday();
     fetchUsage()
@@ -142,8 +131,6 @@ export default function LogScreen() {
       .catch(() => {});
   }, []);
 
-  // Keep the local stash in sync as the conversation grows. Skipping the empty
-  // initial state avoids clobbering a saved chat before the mount restore runs.
   useEffect(() => {
     if (messages.length === 0 && history.length === 0) return;
     setItem(
@@ -152,16 +139,27 @@ export default function LogScreen() {
     );
   }, [messages, history]);
 
+  useLayoutEffect(() => {
+    if (!pinnedToBottom.current) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, recents, remaining, todayLog, pendingConfirm, loading]);
+
+  function handleMessagesScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedToBottom.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  }
+
   async function refreshToday() {
     try {
       setTodayLog(await fetchDayLog(localDateStr()));
     } catch {
-      // No log for today yet (or it was cleared) — nothing to show.
       setTodayLog(null);
     }
   }
 
-  // Remember a submitted text for one-tap reuse, newest first and de-duped.
   function rememberInput(text: string) {
     setRecents(prev => {
       const next = [text, ...prev.filter(t => t !== text)].slice(
@@ -186,8 +184,6 @@ export default function LogScreen() {
     const text = input.trim();
     setInput("");
 
-    // While a past-day confirmation is open, route the message to the
-    // yes / no / clarify handler instead of starting a new analysis.
     if (pendingConfirm) {
       await handleConfirmReply(text);
       return;
@@ -201,16 +197,11 @@ export default function LogScreen() {
     const newHistory: Message[] = [...history, { role: "user", content: text }];
 
     try {
-      // Send the client's local date as `today` (no explicit `date`) so the
-      // server can infer which day the text is for. The server runs in UTC and
-      // can't know the user's "today" on its own.
       const data = await analyzeFood(newHistory, undefined, localDateStr());
 
       if (typeof data.remaining === "number") setRemaining(data.remaining);
       if (typeof data.limit === "number") setLimit(data.limit);
 
-      // Not a food log (greeting, question, small talk) — reply conversationally,
-      // don't show a calorie card, and nothing was logged or counted.
       if (data.is_food_log === false) {
         const reply =
           data.reply?.trim() || "Tell me what you ate and I'll log it for you.";
@@ -219,9 +210,6 @@ export default function LogScreen() {
         return;
       }
 
-      // The text looks like it's for a different day — open a confirmation the
-      // user can answer with yes / no / a corrected day, then append to that day
-      // rather than overwriting it.
       if (data.needs_confirmation && data.inferred_date) {
         setPendingConfirm({
           data,
@@ -251,8 +239,6 @@ export default function LogScreen() {
       refreshToday();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      // Put the text back in the box so a failed send never costs the user
-      // their typing — especially painful for a whole day's worth of meals.
       setInput(text);
       if (message === "RATE_LIMIT_EXCEEDED") {
         setMessages(prev => [
@@ -263,7 +249,6 @@ export default function LogScreen() {
           },
         ]);
       } else {
-        // Recoverable failure (network/server) — offer a one-tap retry.
         setMessages(prev => [
           ...prev,
           { type: "error", text: message, canRetry: true },
@@ -280,14 +265,11 @@ export default function LogScreen() {
     scrollToEnd();
   }
 
-  // The dashboard-calendar guide, with a button to jump straight to Month view.
   function pushGuide() {
     setMessages(prev => [...prev, { type: "guide", text: PREV_DAY_GUIDE }]);
     scrollToEnd();
   }
 
-  // Append the parsed meals to the confirmed past day (no LLM, no charge), or
-  // explain that the day is outside the editable window.
   async function commitConfirm(pc: NonNullable<typeof pendingConfirm>) {
     const label = dayLabel(pc.date, localDateStr());
     if (!isWithinSevenDays(pc.date)) {
@@ -319,7 +301,6 @@ export default function LogScreen() {
     );
   }
 
-  // Interpret a typed reply to an open confirmation: yes / no / a corrected day.
   async function handleConfirmReply(text: string) {
     const pc = pendingConfirm;
     if (!pc) return;
@@ -328,8 +309,6 @@ export default function LogScreen() {
 
     const reply = text.trim().toLowerCase();
 
-    // Priority 1: does the reply name a day/date? If so it's a correction
-    // (e.g. "No, Sunday 6/21") — re-resolve the day before reading it as yes/no.
     const mentionsDay =
       /\b(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday|yesterday|today|tonight|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/.test(
         reply,
@@ -351,7 +330,6 @@ export default function LogScreen() {
           setPendingConfirm({ ...pc, date: newDate });
           return;
         }
-        // Heuristic matched but no concrete date resolved — fall through.
       } catch (err: unknown) {
         pushAssistant(err instanceof Error ? err.message : "Unknown error");
         return;
@@ -360,7 +338,6 @@ export default function LogScreen() {
       }
     }
 
-    // Priority 2: plain confirm / cancel.
     if (
       /^(y|yes|yep|yeah|yup|sure|ok|okay|correct|confirm|right|do it|log it|sounds good)\b/.test(
         reply,
@@ -380,13 +357,7 @@ export default function LogScreen() {
   }
 
   const s = makeStyles(colors);
-  // The floating "Today" button only appears once there's something logged
-  // today; when it's there we reserve top space so it doesn't sit on the date.
   const hasTodayFab = !!(todayLog && todayLog.meals.length > 0);
-  // Returning users (they've logged on this device before) skip the onboarding
-  // welcome and get a shorter prompt that keeps the only universally useful bit
-  // — the free-form example. `recents` loads after mount, so first paint shows
-  // the welcome and swaps in the short hint once we know they're a regular.
   const isReturning = recents.length > 0;
 
   return (
@@ -411,7 +382,7 @@ export default function LogScreen() {
           />
         )}
 
-        <div ref={scrollRef} style={s.messages}>
+        <div ref={scrollRef} style={s.messages} onScroll={handleMessagesScroll}>
           <div
             style={{
               ...s.messagesContent,
@@ -583,9 +554,6 @@ export default function LogScreen() {
   );
 }
 
-// A pop-over recap of everything logged for today, opened from the floating
-// "Today" button. Keeps the items off the (crowded) main log surface until
-// asked for. The backdrop dismisses on tap.
 function TodayPopover({
   log,
   colors,
@@ -1174,8 +1142,6 @@ function makeStyles(colors: Colors): Record<string, CSSProperties> {
       flexShrink: 0,
     },
     textInput: {
-      // Borderless / transparent so it reads as part of the input bar rather
-      // than a boxed bubble — keeps the crowded bottom area feeling cleaner.
       border: "none",
       outline: "none",
       borderRadius: 0,

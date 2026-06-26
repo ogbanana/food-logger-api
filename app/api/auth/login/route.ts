@@ -14,8 +14,6 @@ type UserRow = {
   password_hash: string;
 };
 
-// A real bcrypt hash (computed once) used to equalize response timing when the
-// account does not exist, preventing user enumeration via timing differences.
 const dummyHashPromise = hashPassword("invalid-account-timing-equalizer");
 
 export async function POST(req: NextRequest) {
@@ -31,9 +29,6 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = String(email).toLowerCase();
 
-    // Throttle by client IP (spoof-resistant behind a proxy). Fall back to the
-    // email only when no IP is available — using IP first avoids letting an
-    // attacker lock a victim out by spamming their address.
     const ip = getClientIp(req);
     const rateLimitId = ip ? `ip:${ip}` : `email:${normalizedEmail}`;
 
@@ -53,8 +48,6 @@ export async function POST(req: NextRequest) {
     );
 
     if (!result.rows.length) {
-      // Spend the same time as a real verification to avoid leaking whether
-      // the email is registered.
       await verifyPassword(password, await dummyHashPromise);
       await recordFailedLogin(rateLimitId);
       return Response.json(
@@ -74,7 +67,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Successful login clears the throttle for this identifier.
     await clearLoginAttempts(rateLimitId);
 
     const token = signToken({ userId: user.id, email: user.email });

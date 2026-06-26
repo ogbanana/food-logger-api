@@ -1,7 +1,3 @@
-// Hand-drawn SVG stand-ins for the emoji the app used to render inline, so the
-// UI stays crisp and on-theme instead of depending on the platform emoji font.
-// Each keeps the rough look of the emoji it replaces.
-
 type IconProps = { size?: number };
 
 /** a steak with marbling and a bone nub. */

@@ -1,9 +1,5 @@
 import { getItem, setItem } from "./storage";
 
-// Anonymous guest identity. A random UUID is minted on first use and reused for
-// all unauthenticated requests (sent via the `x-user-id` header). Guests get a
-// 7-day window before their data expires.
-
 const GUEST_ID_KEY = "guest_id";
 const GUEST_CREATED_AT_KEY = "guest_created_at";
 const DAYS_UNTIL_EXPIRY = 7;

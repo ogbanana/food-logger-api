@@ -1,13 +1,7 @@
 import pool from "./db";
 
-// Sliding window for failed-login throttling.
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
-
-// All helpers fail open (allow the request) if the backing query errors — e.g.
-// before the login_attempts migration is applied — so an infra issue can never
-// lock everyone out of login. Errors are logged so the control isn't silently
-// disabled without a trace.
 
 export async function isLoginRateLimited(identifier: string): Promise<boolean> {
   try {
@@ -26,11 +20,9 @@ export async function isLoginRateLimited(identifier: string): Promise<boolean> {
 
 export async function recordFailedLogin(identifier: string): Promise<void> {
   try {
-    await pool.query(
-      `INSERT INTO login_attempts (identifier) VALUES ($1)`,
-      [identifier],
-    );
-    // Opportunistic cleanup so the table stays bounded.
+    await pool.query(`INSERT INTO login_attempts (identifier) VALUES ($1)`, [
+      identifier,
+    ]);
     await pool.query(`DELETE FROM login_attempts WHERE attempted_at < $1`, [
       new Date(Date.now() - WINDOW_MS),
     ]);

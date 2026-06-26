@@ -4,10 +4,6 @@ import { getUserId } from "@/lib/getUser";
 import { isWithinSevenDays } from "@/lib/dateUtils";
 import type { Meal } from "@/lib/llm";
 
-// Appends already-parsed meals to a day's log (creating the log if needed) and
-// recomputes the day's totals. Unlike /api/analyze this runs no LLM and does not
-// count against the daily limit — it's the "confirm" step for logging to a day
-// other than today, so an existing day's meals are merged, not overwritten.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ date: string }> },
@@ -45,7 +41,6 @@ export async function POST(
       return Response.json({ error: "No meals to add" }, { status: 400 });
     }
 
-    // Find or create the day's log.
     const existing = await pool.query<{ id: string }>(
       "SELECT id FROM logs WHERE date = $1 AND user_id = $2",
       [date, userId],
@@ -83,7 +78,6 @@ export async function POST(
       );
     }
 
-    // Recompute the day's totals from all of its meals.
     await pool.query(
       `UPDATE logs SET
          cal_low   = COALESCE((SELECT SUM(cal_low)   FROM meals WHERE log_id = $1), 0),
@@ -96,10 +90,9 @@ export async function POST(
       [logId],
     );
 
-    const logRes = await pool.query(
-      "SELECT * FROM logs WHERE id = $1",
-      [logId],
-    );
+    const logRes = await pool.query("SELECT * FROM logs WHERE id = $1", [
+      logId,
+    ]);
     const mealsRes = await pool.query(
       `SELECT * FROM meals WHERE log_id = $1
        ORDER BY CASE meal

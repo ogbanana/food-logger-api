@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../../lib/client/ThemeContext";
 
-/** A single-line live clock: "Monday, June 23, 2026 · 4:32 PM". Renders nothing
- * until mounted so SSR/CSR markup matches (no hydration mismatch). */
 export default function DateTimeHeader() {
   const { colors } = useTheme();
   const [now, setNow] = useState<Date | null>(null);
