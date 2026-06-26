@@ -26,7 +26,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if email already exists
     const existing = await pool.query<UserRow>(
       "SELECT id FROM users WHERE email = $1",
       [email.toLowerCase()],
@@ -41,7 +40,6 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await hashPassword(password);
 
-    // Create user
     const result = await pool.query<UserRow>(
       `INSERT INTO users (email, password_hash, guest_id)
        VALUES ($1, $2, $3)
@@ -51,9 +49,6 @@ export async function POST(req: NextRequest) {
 
     const user = result.rows[0];
 
-    // Migrate guest logs to new user ID. Guest data is stored under the
-    // namespaced guest key, so we only ever match rows in the guest namespace
-    // — a supplied guestId can never target another (registered) user's UUID.
     if (guestId) {
       const guestUserId = guestKey(guestId);
       await pool.query("UPDATE logs SET user_id = $1 WHERE user_id = $2", [

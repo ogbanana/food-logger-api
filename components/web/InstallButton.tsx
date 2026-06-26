@@ -3,23 +3,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTheme, type Colors } from "../../lib/client/ThemeContext";
 
-// The browser fires `beforeinstallprompt` before the native install UI; we
-// capture it and trigger it from our own button. iOS Safari has no such API, so
-// we show "Add to Home Screen" instructions there instead.
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-// Which iOS browser the user is in. "Add to Home Screen" lives in a different
-// place per browser: Safari exposes it in the system share sheet, while Chrome
-// for iOS (122+) has its own menu item — sharing from Chrome does NOT surface
-// it, since that share-sheet action is Safari-provided.
 type IOSBrowser = "safari" | "chrome" | "other";
 
-// iOS fires no `appinstalled` event and the browser tab never goes standalone,
-// so we can't detect an iOS install — instead the user can confirm it manually
-// and we remember that choice here.
 const DISMISSED_KEY = "a2hs-dismissed";
 
 export default function InstallButton() {
@@ -34,7 +24,6 @@ export default function InstallButton() {
   const helpRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Read platform/install state once on mount (browser-only APIs).
     const nav = navigator as Navigator & { standalone?: boolean };
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -44,9 +33,7 @@ export default function InstallButton() {
     let wasDismissed = false;
     try {
       wasDismissed = localStorage.getItem(DISMISSED_KEY) === "1";
-    } catch {
-      // localStorage can throw in private mode; treat as not dismissed.
-    }
+    } catch {}
     /* eslint-disable react-hooks/set-state-in-effect */
     setInstalled(standalone);
     setDismissed(wasDismissed);
@@ -60,7 +47,6 @@ export default function InstallButton() {
         : null,
     );
     /* eslint-enable react-hooks/set-state-in-effect */
-
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
@@ -77,17 +63,13 @@ export default function InstallButton() {
     };
   }, []);
 
-  // The help text expands below the button, which sits at the bottom of the
-  // scrollable drawer — scroll it into view so it isn't revealed below the fold.
   useEffect(() => {
     if (showIOSHelp) {
       helpRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [showIOSHelp]);
 
-  // Already installed, or the user confirmed they added it — nothing to do.
   if (installed || dismissed) return null;
-  // Non-iOS browsers only get the button once the install prompt is available.
   if (!iosBrowser && !deferred) return null;
 
   async function handleClick() {
@@ -137,9 +119,9 @@ export default function InstallButton() {
             </>
           ) : (
             <>
-              Open this page in <strong>Safari</strong> or <strong>Chrome</strong>,
-              then use that browser&apos;s menu to choose{" "}
-              <strong>Add to Home Screen</strong>.
+              Open this page in <strong>Safari</strong> or{" "}
+              <strong>Chrome</strong>, then use that browser&apos;s menu to
+              choose <strong>Add to Home Screen</strong>.
             </>
           )}
           <button style={s.dismiss} onClick={handleDismiss}>

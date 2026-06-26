@@ -1,17 +1,14 @@
 export default function DashboardIcon({
   color,
   size = 24,
-  // Per-bar fill, left to right. Defaults to "none" so the icon reads as a
-  // clean outline when inactive; pass colors to fill the bars when active.
   barFills = ["none", "none", "none"],
 }: {
   color: string;
   size?: number;
   barFills?: [string, string, string];
 }) {
-  // A filled bar gets its own color as the stroke too, so it reads as one solid
-  // shape rather than a tinted box inside a mismatched outline.
-  const barStroke = (i: number) => (barFills[i] === "none" ? color : barFills[i]);
+  const barStroke = (i: number) =>
+    barFills[i] === "none" ? color : barFills[i];
 
   return (
     <svg

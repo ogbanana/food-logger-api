@@ -120,7 +120,6 @@ const THEME_MODE_KEY = "theme_mode";
 const LEGACY_DARK_KEY = "theme_dark";
 
 type ThemeContextType = {
-  /** The user's chosen mode: explicit light/dark, or auto (follow the device). */
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
   /** Resolved value: true when the effective theme is dark. */
@@ -140,20 +139,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [systemDark, setSystemDark] = useState(false);
 
   useEffect(() => {
-    // Resolve the stored preference after mount so SSR markup (always light)
-    // matches the client's first render, then upgrades to the saved choice.
     const stored = getItem(THEME_MODE_KEY);
     /* eslint-disable react-hooks/set-state-in-effect */
     if (stored === "light" || stored === "dark" || stored === "auto") {
       setModeState(stored);
     } else {
-      // Migrate the old boolean dark-mode flag, if present.
       const legacy = getItem(LEGACY_DARK_KEY);
       if (legacy === "true") setModeState("dark");
       else if (legacy === "false") setModeState("light");
     }
 
-    // Track the device theme so "auto" can follow it live.
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     setSystemDark(mq.matches);
     /* eslint-enable react-hooks/set-state-in-effect */

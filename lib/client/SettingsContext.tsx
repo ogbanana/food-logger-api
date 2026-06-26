@@ -22,7 +22,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    // Load the persisted target after mount to keep SSR/CSR markup in sync.
     const val = getItem(CALORIE_TARGET_KEY);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (val) setCalorieTargetState(parseInt(val));

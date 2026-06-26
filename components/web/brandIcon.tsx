@@ -1,8 +1,3 @@
-// Shared artwork for the app's generated PWA icons (favicon, apple-touch, and
-// the manifest 192/512 PNGs). Rendered through `next/og`'s ImageResponse, which
-// uses a flexbox-only renderer — so the logo is embedded as an <img> data URI on
-// a full-bleed white tile (full-bleed keeps it safe for maskable icons).
-
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
 <path d="M8 4 H24 Q29 4 29 9 V19 Q29 24 24 24 H14 L8 29 L8 24 Q3 24 3 19 V9 Q3 4 8 4 Z" stroke="#000000" stroke-width="2" stroke-linejoin="round"/>
 <path d="M8.2 6.6 H11.6 M8.5 6.6 V8.2 Q7 8.8 7 10.3 V18.6 Q7 19.6 8.1 19.6 H11.7 Q12.8 19.6 12.8 18.6 V10.3 Q12.8 8.8 11.3 8.2 V6.6" stroke="#5589f9" fill="#5589f9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

@@ -18,13 +18,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Missing user ID" }, { status: 401 });
     }
 
-    // Guests are limited by IP (the x-user-id header is spoofable), authenticated
-    // users by their verified account.
     const rateLimitKey = getRateLimitKey(req, userId);
-
-    // Bound TOTAL model calls per day (food + conversational) so that messages
-    // which don't count as food analyses still can't be used to spam the model.
     const { allowed: underTotalCap } = await checkTotalCalls(rateLimitKey);
+
     if (!underTotalCap) {
       return Response.json(
         {
@@ -41,17 +37,16 @@ export async function POST(req: NextRequest) {
       messages,
       date: requestedDate,
       today: clientToday,
-    }: { messages: Message[]; date?: string; today?: string } =
-      await req.json();
-    // The client (in the user's timezone) reports its local "today"; the server
-    // may run in a different zone (e.g. UTC on Vercel), so prefer the client's.
+    }: {
+      messages: Message[];
+      date?: string;
+      today?: string;
+    } = await req.json();
     const today =
       clientToday && /^\d{4}-\d{2}-\d{2}$/.test(clientToday)
         ? clientToday
         : todayLocalDate();
 
-    // An explicit target date (from the day-detail screen) is validated up front
-    // to avoid a wasted LLM call.
     if (requestedDate && !isWithinSevenDays(requestedDate, today)) {
       return Response.json(
         {
@@ -62,11 +57,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // For an add-to-today message (no explicit target day), seed the model with
-    // the day's authoritative current state so it returns the FULL updated day
-    // per the system prompt's accumulation rule. Without this the model can
-    // silently drop a previously logged item, and the destructive rewrite below
-    // would then erase it. Mirrors how /logs/[date]/edit injects state.
     let analysisMessages = messages;
     if (!requestedDate) {
       const todayLog = await pool.query<LogRow>(
@@ -104,9 +94,6 @@ export async function POST(req: NextRequest) {
 
     const data = await analyzeFood(analysisMessages, today);
 
-    // Only an actual food log counts against the daily limit and gets persisted.
-    // Greetings/questions/small talk (and any empty parse) get a conversational
-    // reply, never a charge and never a write (which would wipe the day).
     const isFoodLog =
       data.is_food_log !== false &&
       Array.isArray(data.meals) &&
@@ -124,7 +111,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Enforce and consume the daily food-analysis limit now that we know it's food.
     const usage = await checkUsage(rateLimitKey);
     if (!usage.allowed) {
       return Response.json(
@@ -141,10 +127,6 @@ export async function POST(req: NextRequest) {
 
     let targetDate = requestedDate || today;
 
-    // With no explicit date, use the day the model inferred from the text. If it
-    // isn't today, don't persist yet — return the parse for the client to
-    // confirm, then append to that day (so its existing log isn't overwritten by
-    // this single message).
     if (!requestedDate) {
       const inferred = data.log_date;
       const inferredDate =

@@ -1,10 +1,6 @@
 import { getToken } from "./authClient";
 import { getOrCreateGuestId } from "./identity";
 
-// The web frontend is served from the same origin as the API, so requests use
-// relative paths.
-const API_BASE = "";
-
 function getHeaders(): Record<string, string> {
   const token = getToken();
 
@@ -27,7 +23,7 @@ export async function signup(
   password: string,
 ): Promise<{ token: string; userId: string; email: string }> {
   const guestId = getOrCreateGuestId();
-  const res = await fetch(`${API_BASE}/api/auth/signup`, {
+  const res = await fetch("/api/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, guestId }),
@@ -41,7 +37,7 @@ export async function login(
   email: string,
   password: string,
 ): Promise<{ token: string; userId: string; email: string }> {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
+  const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -56,7 +52,7 @@ export async function analyzeFood(
   date?: string,
   today?: string,
 ): Promise<AnalyzeResponse> {
-  const res = await fetch(`${API_BASE}/api/analyze`, {
+  const res = await fetch("/api/analyze", {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({ messages, date, today }),
@@ -81,7 +77,7 @@ export async function resolveDate(
   text: string,
   today: string,
 ): Promise<string | null> {
-  const res = await fetch(`${API_BASE}/api/resolve-date`, {
+  const res = await fetch("/api/resolve-date", {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({ text, today }),
@@ -96,7 +92,7 @@ export async function fetchUsage(): Promise<{
   remaining: number;
   limit: number;
 }> {
-  const res = await fetch(`${API_BASE}/api/usage`, {
+  const res = await fetch("/api/usage", {
     headers: getHeaders(),
   });
   const raw = await res.json();
@@ -105,7 +101,7 @@ export async function fetchUsage(): Promise<{
 }
 
 export async function fetchWeekLogs(days = 7): Promise<DailyLog[]> {
-  const res = await fetch(`${API_BASE}/api/logs?days=${days}`, {
+  const res = await fetch(`/api/logs?days=${days}`, {
     headers: getHeaders(),
   });
   const raw = await res.json();
@@ -114,7 +110,7 @@ export async function fetchWeekLogs(days = 7): Promise<DailyLog[]> {
 }
 
 export async function fetchDayLog(date: string): Promise<DailyLog> {
-  const res = await fetch(`${API_BASE}/api/logs/${date}`, {
+  const res = await fetch(`/api/logs/${date}`, {
     headers: getHeaders(),
   });
   const raw = await res.json();
@@ -127,7 +123,7 @@ export async function updateMeal(
   meal_id: string,
   updates: Partial<DailyLog["meals"][0]>,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/logs/${date}`, {
+  const res = await fetch(`/api/logs/${date}`, {
     method: "PATCH",
     headers: getHeaders(),
     body: JSON.stringify({ meal_id, ...updates }),
@@ -137,7 +133,7 @@ export async function updateMeal(
 }
 
 export async function deleteMeal(date: string, meal_id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/logs/${date}`, {
+  const res = await fetch(`/api/logs/${date}`, {
     method: "DELETE",
     headers: getHeaders(),
     body: JSON.stringify({ meal_id }),
@@ -150,7 +146,7 @@ export async function proposeEdit(
   date: string,
   messages: Message[],
 ): Promise<CalorieLog> {
-  const res = await fetch(`${API_BASE}/api/logs/${date}/edit`, {
+  const res = await fetch(`/api/logs/${date}/edit`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({ messages }),
@@ -176,7 +172,7 @@ export async function addMealsToDay(
   log: CalorieLog,
   today?: string,
 ): Promise<DailyLog> {
-  const res = await fetch(`${API_BASE}/api/logs/${date}/add`, {
+  const res = await fetch(`/api/logs/${date}/add`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({
@@ -192,7 +188,7 @@ export async function addMealsToDay(
 }
 
 export async function commitEdit(date: string, log: CalorieLog): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/logs/${date}/edit`, {
+  const res = await fetch(`/api/logs/${date}/edit`, {
     method: "PUT",
     headers: getHeaders(),
     body: JSON.stringify({ log }),
@@ -267,24 +263,19 @@ export type MessageType = {
   type: "user" | "result" | "error" | "confirm" | "assistant" | "guide";
   text?: string;
   data?: CalorieLog;
-  // For "confirm" messages (logging to a day other than today):
   inferredDate?: string;
   outOfRange?: boolean;
   pending?: boolean;
   doneLabel?: string;
-  // For "error" messages: whether to offer a one-tap retry (recoverable errors).
   canRetry?: boolean;
 };
 
 export type AnalyzeResponse = CalorieLog & {
   remaining?: number;
   limit?: number;
-  /** When false, the message wasn't a food log; show `reply` instead of a card. */
   is_food_log?: boolean;
   reply?: string;
-  /** Set when the model thinks the text is for a day other than today. */
   inferred_date?: string;
   needs_confirmation?: boolean;
-  /** The inferred day is outside the editable 7-day window. */
   out_of_range?: boolean;
 };

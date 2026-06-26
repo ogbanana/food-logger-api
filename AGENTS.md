@@ -1,14 +1,16 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
 <!-- END:nextjs-agent-rules -->
 
 # How I like Claude to work
 
 _Tweak any line below — these are defaults, not rules set in stone._
 
-- **Match the existing code.** Follow the conventions, naming, and comment style already in the file you're editing. Don't introduce new libraries or patterns without flagging it first.
+- **Match the existing code.** Follow the conventions, naming, and comment style already in the file you're editing. Do not add unnecessary comments in the code. Don't introduce new libraries or patterns without flagging it first.
 - **Small, scoped changes.** Do what was asked and stop. If you spot adjacent work, mention it rather than silently expanding scope.
 - **Explain the "why," not just the "what."** When there's a tradeoff or a judgment call, say what you chose and why in a sentence — especially for UX/affordance decisions.
 - **Be honest about uncertainty.** If you're not sure, say so. Don't invent file names, APIs, library features, or facts — look them up (read the code, web search) or tell me you don't know. Flag when something I asked for is overkill or has a simpler path.

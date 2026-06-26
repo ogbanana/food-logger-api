@@ -9,7 +9,6 @@ export async function GET(req: NextRequest) {
       return Response.json({ error: "Missing user ID" }, { status: 401 });
     }
 
-    // Use the same key as enforcement so the reported remaining matches.
     const usage = await getUsage(getRateLimitKey(req, userId));
     return Response.json(usage);
   } catch (err: unknown) {

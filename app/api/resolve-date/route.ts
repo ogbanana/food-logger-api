@@ -3,10 +3,6 @@ import { resolveDate } from "@/lib/llm";
 import { getUserId, getRateLimitKey } from "@/lib/getUser";
 import { checkTotalCalls } from "@/lib/rateLimit";
 
-// Resolves a clarified day reference ("last Sunday", "the 21st") to a date.
-// Used by the confirmation flow when the user corrects the inferred day. Runs a
-// small model call (no food parse), so it doesn't count against the food limit —
-// only the shared total-call cap, to prevent abuse.
 export async function POST(req: NextRequest) {
   try {
     const userId = getUserId(req);
@@ -22,8 +18,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { text, today }: { text?: string; today?: string } =
-      await req.json();
+    const { text, today }: { text?: string; today?: string } = await req.json();
     if (!text || typeof text !== "string") {
       return Response.json({ error: "Missing text" }, { status: 400 });
     }

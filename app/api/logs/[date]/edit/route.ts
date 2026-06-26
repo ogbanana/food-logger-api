@@ -42,8 +42,6 @@ export async function POST(
     if (!userId)
       return Response.json({ error: "Missing user ID" }, { status: 401 });
 
-    // Propose runs the LLM, so it counts against the same daily limit as
-    // /analyze — otherwise this endpoint is an unmetered way to call the model.
     const rateLimitKey = getRateLimitKey(req, userId);
     const { allowed, remaining, limit } =
       await checkAndIncrementUsage(rateLimitKey);
@@ -61,7 +59,6 @@ export async function POST(
 
     const { messages }: { messages: Message[] } = await req.json();
 
-    // Fetch current meals for context
     const logResult = await pool.query<LogRow>(
       "SELECT id FROM logs WHERE date = $1 AND user_id = $2",
       [date, userId],
@@ -87,7 +84,6 @@ export async function POST(
       [logId],
     );
 
-    // Inject current state as context into the first system message
     const currentState = mealsResult.rows
       .map(
         m =>
@@ -108,8 +104,6 @@ export async function POST(
       ...messages,
     ];
 
-    // This route edits a fixed day, so anchor the model's "today" to it; the
-    // inferred log_date is not used here.
     const proposed = await analyzeFood(contextualMessages, date);
     return Response.json({ proposed, remaining, limit });
   } catch (err: unknown) {
@@ -152,15 +146,12 @@ export async function PUT(
 
     const logId = logResult.rows[0].id;
 
-    // Removing every meal means the day is no longer logged — delete the whole
-    // log instead of leaving an empty 0–0 entry behind.
     if (!Array.isArray(log.meals) || log.meals.length === 0) {
       await pool.query("DELETE FROM meals WHERE log_id = $1", [logId]);
       await pool.query("DELETE FROM logs WHERE id = $1", [logId]);
       return Response.json({ success: true });
     }
 
-    // Update log totals
     await pool.query(
       `UPDATE logs SET
         intro=$1, closing=$2, cal_low=$3, cal_high=$4,
@@ -179,7 +170,6 @@ export async function PUT(
       ],
     );
 
-    // Replace all meals
     await pool.query("DELETE FROM meals WHERE log_id = $1", [logId]);
     for (const meal of log.meals) {
       await pool.query(

@@ -4,7 +4,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Keep the service worker fresh and allow it to control the whole origin.
         source: "/sw.js",
         headers: [
           {

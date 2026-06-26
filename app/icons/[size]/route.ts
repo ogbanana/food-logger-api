@@ -1,7 +1,6 @@
 import { ImageResponse } from "next/og";
 import { brandIconElement } from "../../../components/web/brandIcon";
 
-// Generates the manifest's PNG icons at stable URLs (/icons/192, /icons/512).
 const ALLOWED = new Set([192, 512]);
 
 export function generateStaticParams() {

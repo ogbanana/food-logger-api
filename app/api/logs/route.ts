@@ -24,7 +24,6 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const parsedDays = parseInt(searchParams.get("days") || "7", 10);
-    // Clamp to a sane range; reject NaN/negative/huge values.
     const days = Number.isFinite(parsedDays)
       ? Math.min(Math.max(parsedDays, 1), 90)
       : 7;
@@ -51,8 +50,6 @@ export async function GET(req: NextRequest) {
       }),
     );
 
-    // Ignore empty logs (no meals) — they'd otherwise show as a 0–0 day. These
-    // can linger from older writes; the day is effectively unlogged.
     return Response.json(logs.filter(log => log.meals.length > 0));
   } catch (err: unknown) {
     console.error(err);

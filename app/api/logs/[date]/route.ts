@@ -65,8 +65,6 @@ export async function GET(
       [log.id],
     );
 
-    // A log with no meals is effectively unlogged — treat it as not found so the
-    // day reads as empty/editable rather than a 0–0 entry.
     if (!mealsResult.rows.length) {
       return Response.json(
         { error: "No log found for this date" },
@@ -114,7 +112,6 @@ export async function PATCH(
       assumption,
     } = await req.json();
 
-    // Resolve the log for this user first; never trust meal_id alone.
     const logResult = await pool.query<LogRow>(
       "SELECT id FROM logs WHERE date = $1 AND user_id = $2",
       [date, userId],
@@ -127,9 +124,6 @@ export async function PATCH(
     }
     const logId = logResult.rows[0].id;
 
-    // Scope the update to a meal owned by this user within this log. COALESCE
-    // each column so fields the client omits (e.g. assumption) — which arrive as
-    // undefined/null — keep their existing value instead of being wiped.
     const updateResult = await pool.query(
       `UPDATE meals SET
         items=COALESCE($1, items),
@@ -201,7 +195,6 @@ export async function DELETE(
 
     const { meal_id } = await req.json();
 
-    // Resolve the log for this user first; never trust meal_id alone.
     const logResult = await pool.query<LogRow>(
       "SELECT id FROM logs WHERE date = $1 AND user_id = $2",
       [date, userId],
@@ -214,7 +207,6 @@ export async function DELETE(
     }
     const logId = logResult.rows[0].id;
 
-    // Scope the delete to a meal owned by this user within this log.
     const deleteResult = await pool.query(
       "DELETE FROM meals WHERE id = $1 AND log_id = $2 AND user_id = $3",
       [meal_id, logId, userId],
@@ -223,8 +215,6 @@ export async function DELETE(
       return Response.json({ error: "Meal not found" }, { status: 404 });
     }
 
-    // If that was the last meal, the day is no longer logged — drop the log row
-    // rather than leaving an empty 0–0 entry.
     const remaining = await pool.query<{ count: string }>(
       "SELECT COUNT(*)::int AS count FROM meals WHERE log_id = $1",
       [logId],

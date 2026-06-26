@@ -3,6 +3,7 @@
 import { SettingsProvider } from "../../lib/client/SettingsContext";
 import { ThemeProvider, useTheme } from "../../lib/client/ThemeContext";
 import { DrawerProvider } from "../../lib/client/DrawerContext";
+import NavTracker from "./NavTracker";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
@@ -25,6 +26,7 @@ export default function AppProviders({
     <SettingsProvider>
       <ThemeProvider>
         <DrawerProvider>
+          <NavTracker />
           <Shell>{children}</Shell>
         </DrawerProvider>
       </ThemeProvider>

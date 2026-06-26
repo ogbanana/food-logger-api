@@ -19,6 +19,7 @@ import {
   type CalorieLog,
 } from "../../../lib/client/apiClient";
 import { isWithinSevenDays, parseLocalDate } from "../../../lib/client/utils";
+import { hasInAppHistory } from "../../../lib/client/navHistory";
 import { useTheme, type Colors } from "../../../lib/client/ThemeContext";
 
 type Meal = MealWithId;
@@ -41,6 +42,11 @@ export default function DayDetailScreen() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const canEdit = isWithinSevenDays(date);
+
+  function handleBack() {
+    if (hasInAppHistory()) router.back();
+    else router.push("/");
+  }
 
   useEffect(() => {
     loadLog();
@@ -84,7 +90,10 @@ export default function DayDetailScreen() {
     setChatLoading(true);
     setNotice(null);
 
-    const newMessages: Message[] = [...messages, { role: "user", content: text }];
+    const newMessages: Message[] = [
+      ...messages,
+      { role: "user", content: text },
+    ];
     setMessages(newMessages);
 
     try {
@@ -103,7 +112,9 @@ export default function DayDetailScreen() {
           "Daily limit reached — you've used all 20 of your free analyses for today. Create an account to get unlimited logging.",
         );
       } else if (message === "DATE_OUT_OF_RANGE") {
-        setNotice("Can't edit this day — you can only log food for the past 7 days.");
+        setNotice(
+          "Can't edit this day — you can only log food for the past 7 days.",
+        );
       } else {
         setNotice(message);
       }
@@ -145,7 +156,7 @@ export default function DayDetailScreen() {
     <div style={s.root}>
       <div ref={scrollRef} style={s.scroll}>
         <div style={s.content}>
-          <button style={s.backBtn} onClick={() => router.back()}>
+          <button style={s.backBtn} onClick={handleBack}>
             ← Back
           </button>
 
@@ -171,7 +182,9 @@ export default function DayDetailScreen() {
             <div style={s.readOnlyBanner}>
               <span style={s.readOnlyText}>
                 <CalendarIcon size={15} />
-                <span>This log is older than 7 days and can&apos;t be edited</span>
+                <span>
+                  This log is older than 7 days and can&apos;t be edited
+                </span>
               </span>
             </div>
           )}
@@ -188,11 +201,36 @@ export default function DayDetailScreen() {
           {log && (
             <>
               <div style={s.totalsRow}>
-                <TotalCell label="Calories" value={`${log.cal_low}–${log.cal_high}`} color={colors.calText} colors={colors} />
-                <TotalCell label="Protein" value={`${log.protein_g}g`} color={colors.proteinText} colors={colors} />
-                <TotalCell label="Carbs" value={`${log.carbs_g}g`} color={colors.carbsText} colors={colors} />
-                <TotalCell label="Fat" value={`${log.fat_g}g`} color={colors.fatText} colors={colors} />
-                <TotalCell label="Fiber" value={`${log.fiber_g}g`} color={colors.fiberText} colors={colors} />
+                <TotalCell
+                  label="Calories"
+                  value={`${log.cal_low}–${log.cal_high}`}
+                  color={colors.calText}
+                  colors={colors}
+                />
+                <TotalCell
+                  label="Protein"
+                  value={`${log.protein_g}g`}
+                  color={colors.proteinText}
+                  colors={colors}
+                />
+                <TotalCell
+                  label="Carbs"
+                  value={`${log.carbs_g}g`}
+                  color={colors.carbsText}
+                  colors={colors}
+                />
+                <TotalCell
+                  label="Fat"
+                  value={`${log.fat_g}g`}
+                  color={colors.fatText}
+                  colors={colors}
+                />
+                <TotalCell
+                  label="Fiber"
+                  value={`${log.fiber_g}g`}
+                  color={colors.fiberText}
+                  colors={colors}
+                />
               </div>
 
               <div style={s.sectionLabel}>CURRENT MEALS</div>
@@ -220,13 +258,55 @@ export default function DayDetailScreen() {
                 {proposed.meals.map((meal, i) => (
                   <div key={i} style={s.proposedMeal}>
                     <div style={s.proposedMealName}>{meal.meal}</div>
-                    <div style={s.proposedMealItems}>{meal.items.join(", ")}</div>
+                    <div style={s.proposedMealItems}>
+                      {meal.items.join(", ")}
+                    </div>
                     <div style={s.pillRow}>
-                      <span style={{ ...s.pill, backgroundColor: colors.calBg, color: colors.calText }}>C {meal.cal_low}–{meal.cal_high} kcal</span>
-                      <span style={{ ...s.pill, backgroundColor: colors.proteinBg, color: colors.proteinText }}>P {meal.protein_g}g</span>
-                      <span style={{ ...s.pill, backgroundColor: colors.carbsBg, color: colors.carbsText }}>Cb {meal.carbs_g}g</span>
-                      <span style={{ ...s.pill, backgroundColor: colors.fatBg, color: colors.fatText }}>F {meal.fat_g}g</span>
-                      <span style={{ ...s.pill, backgroundColor: colors.fiberBg, color: colors.fiberText }}>Fi {meal.fiber_g}g</span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.calBg,
+                          color: colors.calText,
+                        }}
+                      >
+                        C {meal.cal_low}–{meal.cal_high} kcal
+                      </span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.proteinBg,
+                          color: colors.proteinText,
+                        }}
+                      >
+                        P {meal.protein_g}g
+                      </span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.carbsBg,
+                          color: colors.carbsText,
+                        }}
+                      >
+                        Cb {meal.carbs_g}g
+                      </span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.fatBg,
+                          color: colors.fatText,
+                        }}
+                      >
+                        F {meal.fat_g}g
+                      </span>
+                      <span
+                        style={{
+                          ...s.pill,
+                          backgroundColor: colors.fiberBg,
+                          color: colors.fiberText,
+                        }}
+                      >
+                        Fi {meal.fiber_g}g
+                      </span>
                     </div>
                     {meal.assumption && (
                       <div style={s.assumption}>Assumed: {meal.assumption}</div>
@@ -238,8 +318,8 @@ export default function DayDetailScreen() {
                   <div style={s.proposedTotalsLabel}>New day total:</div>
                   <div style={s.proposedTotalsValue}>
                     {proposed.totals.cal_low}–{proposed.totals.cal_high} kcal ·
-                    P{proposed.totals.protein_g}g · C{proposed.totals.carbs_g}g ·
-                    F{proposed.totals.fat_g}g · Fi{proposed.totals.fiber_g}g
+                    P{proposed.totals.protein_g}g · C{proposed.totals.carbs_g}g
+                    · F{proposed.totals.fat_g}g · Fi{proposed.totals.fiber_g}g
                   </div>
                 </div>
 
@@ -267,7 +347,9 @@ export default function DayDetailScreen() {
                   key={i}
                   style={m.role === "user" ? s.userBubble : s.assistantBubble}
                 >
-                  <span style={m.role === "user" ? s.userText : s.assistantText}>
+                  <span
+                    style={m.role === "user" ? s.userText : s.assistantText}
+                  >
                     {m.content}
                   </span>
                 </div>
@@ -286,8 +368,8 @@ export default function DayDetailScreen() {
       {canEdit && (
         <div style={s.inputArea}>
           <div style={s.inputHint}>
-            Tell the AI what to change — &quot;add ramen for lunch&quot;, &quot;remove
-            the croissant&quot;, etc.
+            Tell the AI what to change — &quot;add ramen for lunch&quot;,
+            &quot;remove the croissant&quot;, etc.
           </div>
           <div style={s.inputRow}>
             <textarea
@@ -340,7 +422,10 @@ function MealCard({
   async function handleSave() {
     setSaving(true);
     await onSave({
-      items: items.split(",").map(x => x.trim()).filter(Boolean),
+      items: items
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean),
       cal_low: parseInt(calLow),
       cal_high: parseInt(calHigh),
       protein_g: parseInt(protein),
@@ -373,14 +458,44 @@ function MealCard({
             rows={2}
           />
           <div style={s.editRow}>
-            <EditField label="Cal Low" value={calLow} onChange={setCalLow} colors={colors} />
-            <EditField label="Cal High" value={calHigh} onChange={setCalHigh} colors={colors} />
+            <EditField
+              label="Cal Low"
+              value={calLow}
+              onChange={setCalLow}
+              colors={colors}
+            />
+            <EditField
+              label="Cal High"
+              value={calHigh}
+              onChange={setCalHigh}
+              colors={colors}
+            />
           </div>
           <div style={s.editRow}>
-            <EditField label="Protein (g)" value={protein} onChange={setProtein} colors={colors} />
-            <EditField label="Carbs (g)" value={carbs} onChange={setCarbs} colors={colors} />
-            <EditField label="Fat (g)" value={fat} onChange={setFat} colors={colors} />
-            <EditField label="Fiber (g)" value={fiber} onChange={setFiber} colors={colors} />
+            <EditField
+              label="Protein (g)"
+              value={protein}
+              onChange={setProtein}
+              colors={colors}
+            />
+            <EditField
+              label="Carbs (g)"
+              value={carbs}
+              onChange={setCarbs}
+              colors={colors}
+            />
+            <EditField
+              label="Fat (g)"
+              value={fat}
+              onChange={setFat}
+              colors={colors}
+            />
+            <EditField
+              label="Fiber (g)"
+              value={fiber}
+              onChange={setFiber}
+              colors={colors}
+            />
           </div>
           <button
             style={{ ...s.saveBtn, ...(saving ? { opacity: 0.5 } : {}) }}
@@ -394,11 +509,51 @@ function MealCard({
         <>
           <div style={s.mealItems}>{meal.items.join(", ")}</div>
           <div style={s.pillRow}>
-            <span style={{ ...s.pill, backgroundColor: colors.calBg, color: colors.calText }}>C {meal.cal_low}–{meal.cal_high} kcal</span>
-            <span style={{ ...s.pill, backgroundColor: colors.proteinBg, color: colors.proteinText }}>P {meal.protein_g}g</span>
-            <span style={{ ...s.pill, backgroundColor: colors.carbsBg, color: colors.carbsText }}>Cb {meal.carbs_g}g</span>
-            <span style={{ ...s.pill, backgroundColor: colors.fatBg, color: colors.fatText }}>F {meal.fat_g}g</span>
-            <span style={{ ...s.pill, backgroundColor: colors.fiberBg, color: colors.fiberText }}>Fi {meal.fiber_g}g</span>
+            <span
+              style={{
+                ...s.pill,
+                backgroundColor: colors.calBg,
+                color: colors.calText,
+              }}
+            >
+              C {meal.cal_low}–{meal.cal_high} kcal
+            </span>
+            <span
+              style={{
+                ...s.pill,
+                backgroundColor: colors.proteinBg,
+                color: colors.proteinText,
+              }}
+            >
+              P {meal.protein_g}g
+            </span>
+            <span
+              style={{
+                ...s.pill,
+                backgroundColor: colors.carbsBg,
+                color: colors.carbsText,
+              }}
+            >
+              Cb {meal.carbs_g}g
+            </span>
+            <span
+              style={{
+                ...s.pill,
+                backgroundColor: colors.fatBg,
+                color: colors.fatText,
+              }}
+            >
+              F {meal.fat_g}g
+            </span>
+            <span
+              style={{
+                ...s.pill,
+                backgroundColor: colors.fiberBg,
+                color: colors.fiberText,
+              }}
+            >
+              Fi {meal.fiber_g}g
+            </span>
           </div>
           {meal.assumption && (
             <div>
@@ -408,7 +563,9 @@ function MealCard({
               >
                 {showAssumption ? "▲ Hide assumptions" : "▼ View assumptions"}
               </button>
-              {showAssumption && <div style={s.assumption}>{meal.assumption}</div>}
+              {showAssumption && (
+                <div style={s.assumption}>{meal.assumption}</div>
+              )}
             </div>
           )}
         </>
@@ -466,9 +623,6 @@ function makeStyles(
   colors: Colors,
   isDark = false,
 ): Record<string, CSSProperties> {
-  // The proposed-edit card is tinted to stand out. In dark mode the carbs-blue
-  // tint collides with the carbs pills inside it, so use a neutral elevated
-  // surface with a neutral border there instead.
   const proposedBg = isDark ? colors.surfaceAlt : colors.carbsBg;
   const proposedBorder = isDark ? colors.borderStrong : `${colors.carbsText}44`;
   const proposedDivider = isDark ? colors.border : `${colors.carbsText}33`;
@@ -596,7 +750,11 @@ function makeStyles(
       paddingBottom: 10,
       borderBottom: `0.5px solid ${proposedDivider}`,
     },
-    proposedMealName: { fontSize: 14, fontWeight: 600, color: colors.textPrimary },
+    proposedMealName: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: colors.textPrimary,
+    },
     proposedMealItems: { fontSize: 13, color: colors.textSecondary },
     proposedTotals: {
       backgroundColor: colors.surface,
@@ -606,9 +764,21 @@ function makeStyles(
       flexDirection: "column",
       gap: 4,
     },
-    proposedTotalsLabel: { fontSize: 11, color: colors.textMuted, fontWeight: 600 },
-    proposedTotalsValue: { fontSize: 13, color: colors.textPrimary, fontWeight: 500 },
-    proposedClosing: { fontSize: 13, color: colors.textSecondary, fontStyle: "italic" },
+    proposedTotalsLabel: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontWeight: 600,
+    },
+    proposedTotalsValue: {
+      fontSize: 13,
+      color: colors.textPrimary,
+      fontWeight: 500,
+    },
+    proposedClosing: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontStyle: "italic",
+    },
 
     confirmRow: { display: "flex", flexDirection: "row", gap: 8, marginTop: 4 },
     cancelBtn: {
@@ -642,7 +812,11 @@ function makeStyles(
       alignSelf: "flex-end",
       maxWidth: "85%",
     },
-    userText: { fontSize: 13, color: colors.textPrimary, whiteSpace: "pre-wrap" },
+    userText: {
+      fontSize: 13,
+      color: colors.textPrimary,
+      whiteSpace: "pre-wrap",
+    },
     assistantBubble: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: 20,
@@ -654,7 +828,12 @@ function makeStyles(
     },
     assistantText: { fontSize: 13, color: colors.textPrimary },
 
-    pillRow: { display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 6 },
+    pillRow: {
+      display: "flex",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
     pill: {
       padding: "4px 10px",
       borderRadius: 99,
@@ -683,7 +862,12 @@ function makeStyles(
       flexShrink: 0,
     },
     inputHint: { fontSize: 12, color: colors.textMuted },
-    inputRow: { display: "flex", flexDirection: "row", gap: 8, alignItems: "flex-end" },
+    inputRow: {
+      display: "flex",
+      flexDirection: "row",
+      gap: 8,
+      alignItems: "flex-end",
+    },
     textInput: {
       flex: 1,
       border: `0.5px solid ${colors.inputBorder}`,
@@ -708,8 +892,18 @@ function makeStyles(
     },
     sendBtnDisabled: { opacity: 0.35, cursor: "default" },
 
-    editForm: { display: "flex", flexDirection: "column", gap: 10, marginTop: 8 },
-    editLabel: { fontSize: 11, color: colors.textMuted, marginBottom: 4, fontWeight: 500 },
+    editForm: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      marginTop: 8,
+    },
+    editLabel: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginBottom: 4,
+      fontWeight: 500,
+    },
     editInput: {
       border: `0.5px solid ${colors.inputBorder}`,
       borderRadius: 14,

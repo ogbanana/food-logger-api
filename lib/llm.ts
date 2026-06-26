@@ -99,12 +99,6 @@ function weekdayName(dateStr: string): string {
   return WEEKDAYS[new Date(y, m - 1, d).getDay()];
 }
 
-/**
- * Resolve a natural-language day reference ("last Sunday", "the 21st", "two days
- * ago") to a YYYY-MM-DD date relative to `today`, or null if no clear day is
- * given. Used to re-resolve the date when the user clarifies a confirmation —
- * no food parsing, so it doesn't disturb the already-parsed meals.
- */
 export async function resolveDate(
   text: string,
   today: string,
@@ -145,11 +139,9 @@ export async function analyzeFood(
   today: string,
 ): Promise<CalorieLog> {
   try {
-    // Try Gemini first
     return await analyzeWithGemini(messages, today);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "";
-    // Fall back to Claude on rate limit or any Gemini error
     if (
       message.includes("429") ||
       message.includes("quota") ||

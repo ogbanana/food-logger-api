@@ -43,11 +43,6 @@ export default function DashboardScreen() {
     router.push(`/log/${dateStr.split("T")[0]}`);
   }
 
-  // Switch range and mirror it in the URL via the Next router (so the router's
-  // own history stack records it) — that way returning here with the back
-  // button restores the tab the user left from, instead of dropping them on
-  // Today. A plain history.replaceState isn't seen by the router and gets lost
-  // on back navigation.
   function selectRange(r: TimeRange) {
     setRange(r);
     router.replace(r === "today" ? "/dashboard" : `/dashboard?view=${r}`, {
@@ -106,13 +101,9 @@ export default function DashboardScreen() {
     }
   }
 
-  // Load the week/month logs once on mount. `loadData` only updates state inside
-  // async callbacks, so this is a fetch-on-mount, not a synchronous render loop.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
-    // Restore the range from the URL: linked from the Log screen's guide
-    // (?view=month) or returned to via the back button (?view=week|month).
     if (typeof window !== "undefined") {
       const view = new URLSearchParams(window.location.search).get("view");
       if (view === "week" || view === "month") {
@@ -133,8 +124,6 @@ export default function DashboardScreen() {
         ? weekLogs
         : monthLogs;
 
-  // The "Day by day" recap is a rolling last-7-days list, not the full history.
-  // weekLogs already comes back newest-first, so just drop anything older.
   const recentLogs = weekLogs.filter(l => isWithinSevenDays(l.date));
 
   function formatDate(dateStr: string): string {
@@ -273,7 +262,6 @@ export default function DashboardScreen() {
                   const goalText = target.toLocaleString();
                   return (
                     <div style={s.calBarTrack}>
-                      {/* Base layer: dark text, reads against the empty track. */}
                       <div style={s.calBarRow}>
                         <span
                           style={{
@@ -292,10 +280,6 @@ export default function DashboardScreen() {
                           {goalText}
                         </span>
                       </div>
-                      {/* Filled portion: the same labels in white, clipped to
-                          the fill width so white only shows over the fill. The
-                          inner row is sized back up to the full track width so
-                          its text lines up exactly with the base layer. */}
                       {pct > 0 && (
                         <div
                           style={{
@@ -325,9 +309,6 @@ export default function DashboardScreen() {
               </div>
             )}
 
-            {/* Today's meals — read-only recall. Editing lives on the Log
-                screen (the "View & Edit" button below), so these rows are
-                intentionally static with no tap target or macros. */}
             {range === "today" && todayLog && todayLog.meals.length > 0 && (
               <div style={s.card}>
                 <div style={s.cardLabel}>TODAY&apos;S MEALS</div>
@@ -562,8 +543,6 @@ function SummaryCard({
   );
 }
 
-// Reuses the "Day Total" card from the Log screen so the Today summary matches
-// the layout the user already sees when logging a meal.
 function DayTotalCard({ log, colors }: { log: DailyLog; colors: Colors }) {
   const s = makeStyles(colors);
   return (
@@ -683,8 +662,6 @@ function CalendarGrid({
     const entry = logMap[dateStr];
     const isToday = dateStr === todayStr;
     const overTarget = entry && entry.cal_high > target;
-    // A day is editable when it falls inside the 7-day window (whether or not it
-    // already has a log) — those get a pen affordance.
     const editableDay = isWithinSevenDays(dateStr);
     const editable = !entry && editableDay;
     const avgCal = entry ? Math.round((entry.cal_low + entry.cal_high) / 2) : 0;

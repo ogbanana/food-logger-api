@@ -32,10 +32,6 @@ export default function Drawer() {
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetInput, setTargetInput] = useState("");
 
-  // Re-read identity/auth from storage each time the drawer opens, so it
-  // reflects the latest login/logout/guest state. This syncs an external store
-  // (localStorage) into React on an event, which the lint rule below flags but
-  // is the intended pattern here.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!drawerOpen) return;
@@ -527,7 +523,6 @@ function makeStyles(
     segTrack: {
       display: "flex",
       flexDirection: "row",
-      // In dark mode use a lighter well so the recessed dark pills stand out.
       backgroundColor: isDark ? colors.surface : colors.bg,
       borderRadius: 11,
       padding: 3,
@@ -538,7 +533,6 @@ function makeStyles(
       padding: "8px 0",
       borderRadius: 8,
       border: "none",
-      // Unselected pills get an explicit darker fill in dark mode.
       backgroundColor: isDark ? colors.bg : "transparent",
       cursor: "pointer",
       fontSize: 13,

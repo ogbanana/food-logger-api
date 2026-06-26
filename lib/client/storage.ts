@@ -1,7 +1,3 @@
-// Browser key/value storage. Mirrors the mobile app's storage interface, which
-// falls back to localStorage on web. All access is guarded so it is safe to
-// import during server rendering (where `window` is absent).
-
 export function setItem(key: string, value: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, value);
