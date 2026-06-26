@@ -1,7 +1,3 @@
--- Registered accounts. `id` is the verified identity embedded in the JWT and
--- stored as the owner key on logs/meals. Email is stored lowercased by the app;
--- UNIQUE enforces no duplicate accounts. `guest_id` records the pre-signup guest
--- identifier so guest data can be migrated on signup.
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL UNIQUE,
@@ -10,10 +6,6 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Per-day analysis counter backing the rate limiter. `user_id` is the
--- rate-limit key, not necessarily a registered user: a user's UUID,
--- "guest:<id>", or "ip:<addr>" (see getRateLimitKey) — hence TEXT. The
--- (user_id, date) primary key backs the ON CONFLICT upsert in checkAndIncrementUsage.
 CREATE TABLE IF NOT EXISTS daily_usage (
   user_id TEXT NOT NULL,
   date DATE NOT NULL,
@@ -38,14 +30,11 @@ CREATE TABLE IF NOT EXISTS logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Logs are looked up by (user_id, date) on nearly every request.
 CREATE INDEX IF NOT EXISTS idx_logs_user_date ON logs (user_id, date);
 
 CREATE TABLE IF NOT EXISTS meals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   log_id UUID REFERENCES logs(id) ON DELETE CASCADE,
-  -- Denormalized owner key, mirrors logs.user_id. Used to scope meal
-  -- updates/deletes directly to the caller.
   user_id TEXT NOT NULL,
   meal TEXT,
   items TEXT[],
@@ -60,8 +49,6 @@ CREATE TABLE IF NOT EXISTS meals (
 
 CREATE INDEX IF NOT EXISTS idx_meals_log_id ON meals (log_id);
 
--- Failed-login throttling. `identifier` is "ip:<addr>" (preferred) or
--- "email:<addr>". Rows are pruned opportunistically once outside the window.
 CREATE TABLE IF NOT EXISTS login_attempts (
   id BIGSERIAL PRIMARY KEY,
   identifier TEXT NOT NULL,
